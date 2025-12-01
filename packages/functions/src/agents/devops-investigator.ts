@@ -6,9 +6,11 @@ import {
   runAgentLoop,
   buildInvestigationPrompt,
   initializeLLM,
+  sendApprovalEmail,
   type AgentState,
   type AgentEvent,
   type ToolContext,
+  type ApprovalEmailData,
 } from "@ai-automation-platform/core";
 
 // Initialize DynamoDB client
@@ -181,10 +183,45 @@ export async function handler(
       toolCalls: finalState.toolCallHistory.length,
     });
 
-    // If paused for approval, we need to handle that
+    // If paused for approval, send notification email
     if (finalState.status === "paused" && finalState.pendingApproval) {
       console.log("Agent paused - waiting for approval:", finalState.pendingApproval);
-      // TODO: Send notification for approval
+
+      const alertEmailTo = process.env.ALERT_EMAIL_TO;
+      const alertEmailFrom = process.env.ALERT_EMAIL_FROM || "onboarding@resend.dev";
+      const apiUrl = Resource.Api.url;
+
+      if (alertEmailTo && apiUrl) {
+        // Calculate expiration (30 minutes from request)
+        const requestedAt = finalState.pendingApproval.requestedAt;
+        const expiresAt = new Date(
+          new Date(requestedAt).getTime() + 30 * 60 * 1000
+        ).toISOString();
+
+        const approvalEmailData: ApprovalEmailData = {
+          runId,
+          workspaceId,
+          toolName: finalState.pendingApproval.toolName,
+          toolArgs: finalState.pendingApproval.toolArgs,
+          requestedAt,
+          expiresAt,
+          approveUrl: `${apiUrl}approvals/${runId}/approve?workspace_id=${workspaceId}`,
+          rejectUrl: `${apiUrl}approvals/${runId}/reject?workspace_id=${workspaceId}`,
+        };
+
+        try {
+          await sendApprovalEmail(
+            { to: alertEmailTo, from: alertEmailFrom },
+            approvalEmailData
+          );
+          console.log("Approval notification email sent to:", alertEmailTo);
+        } catch (emailError) {
+          console.error("Failed to send approval email:", emailError);
+          // Don't throw - the agent run is still saved, just notification failed
+        }
+      } else {
+        console.warn("Cannot send approval email: ALERT_EMAIL_TO or API URL not configured");
+      }
     }
   } catch (error) {
     console.error("Investigation error:", error);

@@ -71,26 +71,26 @@ export function buildInvestigationPrompt(
     const parts: string[] = [];
 
     if (alertContext.service) {
-      parts.push(\`- Service: \${alertContext.service}\`);
+      parts.push(`- Service: ${alertContext.service}`);
     }
     if (alertContext.errorMessage) {
-      parts.push(\`- Error: \${alertContext.errorMessage}\`);
+      parts.push(`- Error: ${alertContext.errorMessage}`);
     }
     if (alertContext.logGroup) {
-      parts.push(\`- Log Group: \${alertContext.logGroup}\`);
+      parts.push(`- Log Group: ${alertContext.logGroup}`);
     }
     if (alertContext.timeRange) {
-      parts.push(\`- Time Range: \${alertContext.timeRange}\`);
+      parts.push(`- Time Range: ${alertContext.timeRange}`);
     }
 
     if (parts.length > 0) {
-      contextSection = \`
+      contextSection = `
 
 ## Alert Context
 
-\${parts.join("\\n")}
+${parts.join("\n")}
 
-Use this context to focus your investigation. Start by querying the relevant logs.\`;
+Use this context to focus your investigation. Start by querying the relevant logs.`;
     }
   }
 

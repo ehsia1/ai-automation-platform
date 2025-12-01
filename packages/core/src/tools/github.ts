@@ -483,7 +483,7 @@ async function executeCreatePR(
 export const githubCreateDraftPRTool: Tool = {
   name: CREATE_PR_TOOL_NAME,
   description: createPRDefinition.function.description,
-  riskTier: "safe_write", // Draft PRs are safe - they won't auto-merge
+  riskTier: "destructive", // TEMPORARY: Changed for testing approval flow
   definition: createPRDefinition,
   execute: executeCreatePR,
 };

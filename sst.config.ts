@@ -71,6 +71,9 @@ export default $config({
       ALERT_EMAIL_FROM: process.env.ALERT_EMAIL_FROM || "onboarding@resend.dev",
     };
 
+    // API (defined early so it can be linked to subscribers)
+    const api = new sst.aws.ApiGatewayV2("Api");
+
     // Classification subscriber - triggered by item.created events
     bus.subscribe("classification", {
       handler: "packages/functions/src/classification/classify.handler",
@@ -109,9 +112,10 @@ export default $config({
     // DevOps Investigator agent subscriber
     bus.subscribe("devops-investigator", {
       handler: "packages/functions/src/agents/devops-investigator.handler",
-      link: [alertsTable, agentRunsTable, itemsTable],
+      link: [alertsTable, agentRunsTable, itemsTable, api],
       environment: {
         ...llmEnv,
+        ...notificationEnv,
         GITHUB_TOKEN: process.env.GITHUB_TOKEN || "",
       },
       timeout: "120 seconds",
@@ -130,9 +134,6 @@ export default $config({
         detailType: ["investigation.requested"],
       },
     });
-
-    // API
-    const api = new sst.aws.ApiGatewayV2("Api");
 
     // Health check
     api.route("GET /", {
