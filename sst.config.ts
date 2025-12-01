@@ -61,6 +61,7 @@ export default $config({
       OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL || "http://localhost:11434",
       OLLAMA_MODEL: process.env.OLLAMA_MODEL || "llama3.1:8b",
       ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || "",
+      ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514",
     };
 
     // Notification environment variables
@@ -132,6 +133,32 @@ export default $config({
     }, {
       pattern: {
         detailType: ["investigation.requested"],
+      },
+    });
+
+    // Agent Resume subscriber - triggered when approval is decided
+    bus.subscribe("agent-resume", {
+      handler: "packages/functions/src/agents/agent-resume.handler",
+      link: [agentRunsTable, api],
+      environment: {
+        ...llmEnv,
+        ...notificationEnv,
+        GITHUB_TOKEN: process.env.GITHUB_TOKEN || "",
+      },
+      timeout: "120 seconds",
+      permissions: [
+        {
+          actions: [
+            "logs:StartQuery",
+            "logs:GetQueryResults",
+            "logs:DescribeLogGroups",
+          ],
+          resources: ["*"],
+        },
+      ],
+    }, {
+      pattern: {
+        detailType: ["approval.decided"],
       },
     });
 

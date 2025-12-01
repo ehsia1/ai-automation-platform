@@ -352,7 +352,8 @@ async function executeCreatePR(
   args: Record<string, unknown>,
   _context: ToolContext
 ): Promise<ToolResult> {
-  const { repo, title, body, base, head, files } = args as CreatePRArgs;
+  const { repo, title, body, base, head } = args as Omit<CreatePRArgs, "files">;
+  let { files } = args as { files: unknown };
 
   if (!repo || !title || !body || !base || !head || !files) {
     return {
@@ -360,6 +361,19 @@ async function executeCreatePR(
       output: "",
       error: "Missing required parameters",
     };
+  }
+
+  // Handle files passed as JSON string (LLMs sometimes do this)
+  if (typeof files === "string") {
+    try {
+      files = JSON.parse(files);
+    } catch {
+      return {
+        success: false,
+        output: "",
+        error: "files must be a valid JSON array",
+      };
+    }
   }
 
   const [owner, repoName] = repo.split("/");
@@ -378,6 +392,12 @@ async function executeCreatePR(
       error: "files must be a non-empty array",
     };
   }
+
+  // Normalize file structure - handle both 'path' and 'filename' keys
+  const normalizedFiles = (files as Array<{ path?: string; filename?: string; content: string }>).map(f => ({
+    path: f.path || f.filename || "unknown.txt",
+    content: f.content,
+  }));
 
   try {
     const client = getOctokit();
@@ -408,7 +428,7 @@ async function executeCreatePR(
 
     // 4. Create blobs for each file
     const blobs = await Promise.all(
-      files.map(async (file) => {
+      normalizedFiles.map(async (file) => {
         const blob = await client.git.createBlob({
           owner,
           repo: repoName,
@@ -483,7 +503,7 @@ async function executeCreatePR(
 export const githubCreateDraftPRTool: Tool = {
   name: CREATE_PR_TOOL_NAME,
   description: createPRDefinition.function.description,
-  riskTier: "destructive", // TEMPORARY: Changed for testing approval flow
+  riskTier: "safe_write",
   definition: createPRDefinition,
   execute: executeCreatePR,
 };

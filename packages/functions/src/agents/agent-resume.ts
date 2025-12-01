@@ -1,9 +1,13 @@
 import type { EventBridgeEvent } from "aws-lambda";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import {
+  DynamoDBDocumentClient,
+  GetCommand,
+  UpdateCommand,
+} from "@aws-sdk/lib-dynamodb";
 import { Resource } from "sst";
 import {
-  runAgentLoop,
+  resumeAgentAfterApproval,
   buildInvestigationPrompt,
   initializeLLM,
   sendApprovalEmail,
@@ -17,18 +21,14 @@ import {
 const ddbClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(ddbClient);
 
-// Event detail type for investigation requests
-interface InvestigationRequestDetail {
+// Event detail type for approval decisions
+interface ApprovalDecidedDetail {
   workspaceId: string;
   runId: string;
-  prompt: string;
-  alertId?: string;
-  context?: {
-    service?: string;
-    errorMessage?: string;
-    logGroup?: string;
-    timeRange?: string;
-  };
+  approved: boolean;
+  reason?: string;
+  decidedBy: string;
+  decidedAt: string;
 }
 
 // Initialize LLM from environment
@@ -42,43 +42,7 @@ function initLLM(): void {
   });
 }
 
-// Save agent run to DynamoDB
-async function saveAgentRun(
-  workspaceId: string,
-  runId: string,
-  state: AgentState,
-  input: string,
-  alertId?: string,
-  context?: InvestigationRequestDetail["context"]
-): Promise<void> {
-  const now = new Date().toISOString();
-
-  await docClient.send(
-    new PutCommand({
-      TableName: Resource.AgentRuns.name,
-      Item: {
-        workspace_id: workspaceId,
-        run_id: runId,
-        agent_type: "devops-investigator",
-        status: state.status,
-        input,
-        result: state.result,
-        error: state.error,
-        iterations: state.iterations,
-        tool_call_count: state.toolCallHistory.length,
-        tool_calls: state.toolCallHistory,
-        messages: state.messages, // Save messages for resume
-        pending_approval: state.pendingApproval,
-        alert_id: alertId,
-        context, // Save context for rebuilding prompt on resume
-        created_at: now,
-        updated_at: now,
-      },
-    })
-  );
-}
-
-// Update agent run status
+// Update agent run in DynamoDB
 async function updateAgentRun(
   workspaceId: string,
   runId: string,
@@ -118,17 +82,60 @@ async function updateAgentRun(
 }
 
 export async function handler(
-  event: EventBridgeEvent<"investigation.requested", InvestigationRequestDetail>
+  event: EventBridgeEvent<"approval.decided", ApprovalDecidedDetail>
 ): Promise<void> {
-  console.log("DevOps Investigator triggered:", JSON.stringify(event, null, 2));
+  console.log("=".repeat(60));
+  console.log("AGENT RESUME HANDLER TRIGGERED");
+  console.log("=".repeat(60));
+  console.log("Event:", JSON.stringify(event, null, 2));
 
-  const { workspaceId, runId, prompt, alertId, context } = event.detail;
+  const { workspaceId, runId, approved, reason, decidedBy } = event.detail;
+
+  // Get the agent run from DynamoDB
+  const getResult = await docClient.send(
+    new GetCommand({
+      TableName: Resource.AgentRuns.name,
+      Key: {
+        workspace_id: workspaceId,
+        run_id: runId,
+      },
+    })
+  );
+
+  if (!getResult.Item) {
+    console.error("Agent run not found:", runId);
+    return;
+  }
+
+  const agentRun = getResult.Item;
+
+  // Verify the run is paused and has pending approval
+  if (agentRun.status !== "paused" || !agentRun.pending_approval) {
+    console.log("Agent run is not waiting for approval:", {
+      status: agentRun.status,
+      hasPendingApproval: !!agentRun.pending_approval,
+    });
+    return;
+  }
+
+  console.log(`Resuming agent run ${runId} - approved: ${approved}`);
 
   // Initialize LLM
   initLLM();
 
-  // Build investigation prompt with context
-  const systemPrompt = buildInvestigationPrompt(context);
+  // Reconstruct the agent state from saved data
+  const savedState: AgentState = {
+    status: "paused",
+    messages: agentRun.messages || [],
+    iterations: agentRun.iterations || 0,
+    toolCallHistory: agentRun.tool_calls || [],
+    pendingApproval: {
+      toolCallId: agentRun.pending_approval.toolCallId,
+      toolName: agentRun.pending_approval.toolName,
+      toolArgs: agentRun.pending_approval.toolArgs,
+      requestedAt: agentRun.pending_approval.requestedAt,
+    },
+  };
 
   // Set up tool context
   const toolContext: ToolContext = {
@@ -139,8 +146,8 @@ export async function handler(
   // Agent configuration
   const config = {
     maxIterations: 15,
-    systemPrompt,
-    timeoutMs: 110000, // 110 seconds (leaving buffer for Lambda 120s timeout)
+    systemPrompt: buildInvestigationPrompt(agentRun.context),
+    timeoutMs: 110000,
   };
 
   // Event handler to log progress
@@ -165,37 +172,42 @@ export async function handler(
         console.log("LLM response:", evt.content.substring(0, 200) + "...");
         break;
       case "completed":
-        console.log("Investigation completed");
+        console.log("Agent completed");
         break;
       case "failed":
-        console.error("Investigation failed:", evt.error);
+        console.error("Agent failed:", evt.error);
         break;
     }
   };
 
   try {
-    // Run the agent loop
-    const finalState = await runAgentLoop(prompt, config, toolContext, undefined, onEvent);
+    // Resume the agent with the approval decision
+    const finalState = await resumeAgentAfterApproval(
+      savedState,
+      approved,
+      config,
+      toolContext,
+      onEvent
+    );
 
-    // Save the final state (include context for resume)
-    await saveAgentRun(workspaceId, runId, finalState, prompt, alertId, context);
+    // Save the updated state
+    await updateAgentRun(workspaceId, runId, finalState);
 
-    console.log("Investigation complete:", {
+    console.log("Agent resume complete:", {
       status: finalState.status,
       iterations: finalState.iterations,
       toolCalls: finalState.toolCallHistory.length,
     });
 
-    // If paused for approval, send notification email
+    // If paused again for another approval, send notification
     if (finalState.status === "paused" && finalState.pendingApproval) {
-      console.log("Agent paused - waiting for approval:", finalState.pendingApproval);
+      console.log("Agent paused again - waiting for approval:", finalState.pendingApproval);
 
       const alertEmailTo = process.env.ALERT_EMAIL_TO;
       const alertEmailFrom = process.env.ALERT_EMAIL_FROM || "onboarding@resend.dev";
       const apiUrl = Resource.Api.url;
 
       if (alertEmailTo && apiUrl) {
-        // Calculate expiration (30 minutes from request)
         const requestedAt = finalState.pendingApproval.requestedAt;
         const expiresAt = new Date(
           new Date(requestedAt).getTime() + 30 * 60 * 1000
@@ -217,28 +229,25 @@ export async function handler(
             { to: alertEmailTo, from: alertEmailFrom },
             approvalEmailData
           );
-          console.log("Approval notification email sent to:", alertEmailTo);
+          console.log("Approval notification email sent");
         } catch (emailError) {
           console.error("Failed to send approval email:", emailError);
-          // Don't throw - the agent run is still saved, just notification failed
         }
-      } else {
-        console.warn("Cannot send approval email: ALERT_EMAIL_TO or API URL not configured");
       }
     }
   } catch (error) {
-    console.error("Investigation error:", error);
+    console.error("Agent resume error:", error);
 
-    // Save error state
+    // Update with error state
     const errorState: AgentState = {
       status: "failed",
-      messages: [],
-      iterations: 0,
-      toolCallHistory: [],
+      messages: savedState.messages,
+      iterations: savedState.iterations,
+      toolCallHistory: savedState.toolCallHistory,
       error: error instanceof Error ? error.message : String(error),
     };
 
-    await saveAgentRun(workspaceId, runId, errorState, prompt, alertId, context);
+    await updateAgentRun(workspaceId, runId, errorState);
 
     throw error;
   }

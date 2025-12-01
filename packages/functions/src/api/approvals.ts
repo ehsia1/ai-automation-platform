@@ -153,7 +153,14 @@ export const approve: APIGatewayProxyHandlerV2 = async (event) => {
     }
 
     // Emit approval.decided event to resume the agent
-    await eventBridge.send(
+    console.log("Emitting approval.decided event:", {
+      busName: Resource.Bus.name,
+      workspaceId,
+      runId,
+      approved: true,
+    });
+
+    const eventResult = await eventBridge.send(
       new PutEventsCommand({
         Entries: [
           {
@@ -171,6 +178,8 @@ export const approve: APIGatewayProxyHandlerV2 = async (event) => {
         ],
       })
     );
+
+    console.log("EventBridge response:", JSON.stringify(eventResult, null, 2));
 
     // Update the run status
     await docClient.send(
