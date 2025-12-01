@@ -126,7 +126,46 @@ OLLAMA_MODEL=llama3.1:8b
 RESEND_API_KEY=re_xxx            # For email notifications
 ALERT_EMAIL_TO=your@email.com
 GITHUB_TOKEN=ghp_xxx             # For GitHub tools
+API_URL=https://xxx.execute-api.us-east-1.amazonaws.com  # From SST dev output
 ```
+
+## Postman Collection
+
+API endpoints are documented in a Postman collection for easy testing.
+
+### Collection Details
+
+| Property | Value |
+|----------|-------|
+| Collection Name | AI Automation Platform API |
+| Workspace | Evan personal |
+| Collection ID | `812a6ff9-b5d1-4b0d-b94c-5afef2ec514d` |
+| Collection UID | `2483021-812a6ff9-b5d1-4b0d-b94c-5afef2ec514d` |
+
+### Folders & Endpoints
+
+| Folder | Endpoints |
+|--------|-----------|
+| Investigation | `POST /investigate` - Start AI investigation |
+| Agent Runs | `GET /agent-runs` - List runs, `GET /agent-runs/:runId` - Get run details |
+| Approvals | `GET /approvals` - List pending, `POST /approvals/:id/approve`, `POST /approvals/:id/reject` |
+| Webhooks | `POST /webhooks/datadog`, `POST /ingest/email` |
+| (root) | `GET /` - Health check, `GET /alerts`, `GET /items` |
+
+### Keeping Postman Updated
+
+When adding new API endpoints:
+1. Add the endpoint to `sst.config.ts`
+2. Create the handler in `packages/functions/src/api/`
+3. Add the request to the Postman collection using MCP tools:
+   - Use `mcp__postman__createCollectionRequest` with collectionId `812a6ff9-b5d1-4b0d-b94c-5afef2ec514d`
+   - Place in appropriate folder using `folderId`
+
+Folder IDs for reference:
+- Investigation: `a69166eb-e241-bdff-6c95-ce44098eb47c`
+- Agent Runs: `bf9621ad-30df-a7ed-0e56-d1234b80feac`
+- Approvals: `2f870162-8d96-6d39-c878-c06ea86030ac`
+- Webhooks: `68584e8e-5fdb-ed3c-3a43-75977bb03a4e`
 
 ## Notion Integration
 
@@ -170,6 +209,49 @@ When creating tasks in Notion:
 - **New integration added** → Add to Integrations database
 - **New agent created** → Add to Agents database, create doc page
 
+## AWS Cost Management
+
+**Important**: This project uses AWS free tier credits during development. Be conservative with AWS resource usage.
+
+### Guidelines
+
+- **Prefer local testing** over deploying to AWS when possible
+  - Use `npx tsx scripts/test-agent.ts` for agent testing
+  - Use Ollama locally instead of Lambda → Anthropic for iteration
+- **Avoid frequent deploys** - batch changes and deploy once rather than deploying after every small change
+- **Don't leave `sst dev` running** unnecessarily - it provisions real AWS resources
+- **Clean up after testing** - remove unused stacks with `sst remove`
+- **Watch for expensive resources**:
+  - Lambda invocations (free tier: 1M/month)
+  - API Gateway requests (free tier: 1M/month)
+  - DynamoDB read/write (free tier: 25 GB storage, 25 WCU/RCU)
+  - CloudWatch Logs (can accumulate quickly)
+
+### When to Deploy to AWS
+
+- Testing Lambda-specific functionality (EventBridge, API Gateway integration)
+- End-to-end testing that requires the full stack
+- Verifying SST configuration changes
+- Demos or sharing with others
+
+## Test Repositories
+
+For testing GitHub-related agent functionality (PR creation, code search, etc.), use these private test repos:
+
+| Repo | Owner | Purpose |
+|------|-------|---------|
+| `ai-oncall-test` | `ehsia1` | Contains buggy `src/calculator.py` for divide-by-zero fix testing |
+| `ai-agent-test` | `ehsia1` | General agent testing |
+
+**Important**: Always create test repos as **private** to avoid exposing test data publicly.
+
+### Local Agent Testing
+
+Run the agent locally (bypasses Lambda, connects directly to LLM):
+```bash
+npx tsx scripts/test-agent.ts
+```
+
 ## Commands
 
 ```bash
@@ -200,14 +282,16 @@ curl $API_URL/approvals
 - LLM tool calling (Ollama)
 - Tool registry with risk tiers
 - CloudWatch Logs tool
-- GitHub tools (search, get file, create draft PR)
+- GitHub tools (search, get file, list files, create draft PR)
 - Agent loop with state management
 - DevOps Investigator agent
 - Safety guardrails and audit logging
 - Approval workflow API
+- Email notification for approvals (Resend)
+- Agent resume after approval
+- Postman collection for API testing
 
 ### Next Priority
-- Email notification for approvals
-- Agent resume after approval
 - Test with real log groups
 - Database query tool
+- Improve PR creation (full file content handling)

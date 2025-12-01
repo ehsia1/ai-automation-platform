@@ -126,7 +126,7 @@ export class OllamaProvider implements LLMProvider {
     };
 
     const choice = data.choices[0];
-    const toolCalls: ToolCall[] | undefined = choice?.message?.tool_calls?.map(
+    let toolCalls: ToolCall[] | undefined = choice?.message?.tool_calls?.map(
       (tc) => ({
         id: tc.id,
         type: "function" as const,
@@ -137,6 +137,15 @@ export class OllamaProvider implements LLMProvider {
       })
     );
 
+    // Fallback: Try to parse tool calls from text content if model didn't use proper format
+    // Some models (like Llama via Ollama) output tool calls as JSON in the content
+    if (!toolCalls?.length && choice?.message?.content) {
+      const parsedFromContent = this.parseToolCallsFromContent(choice.message.content);
+      if (parsedFromContent.length > 0) {
+        toolCalls = parsedFromContent;
+      }
+    }
+
     // Determine finish reason
     let finishReason: "stop" | "tool_calls" | "length" = "stop";
     if (choice?.finish_reason === "tool_calls" || toolCalls?.length) {
@@ -146,9 +155,124 @@ export class OllamaProvider implements LLMProvider {
     }
 
     return {
-      content: choice?.message?.content || undefined,
+      content: toolCalls?.length ? undefined : choice?.message?.content || undefined,
       tool_calls: toolCalls,
       finish_reason: finishReason,
     };
+  }
+
+  /**
+   * Parse tool calls from text content when the model outputs JSON instead of using proper tool_calls
+   * Handles formats like:
+   * - {"name": "tool_name", "parameters": {...}}
+   * - {"name": "tool_name", "arguments": {...}}
+   */
+  private parseToolCallsFromContent(content: string): ToolCall[] {
+    const toolCalls: ToolCall[] = [];
+
+    // Match JSON objects that look like tool calls
+    // Pattern: {"name": "...", "parameters": {...}} or {"name": "...", "arguments": {...}}
+    const jsonPattern = /\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"(?:parameters|arguments)"\s*:\s*(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}|\[[^\[\]]*\]|"[^"]*")/g;
+
+    let match;
+    let callIndex = 0;
+
+    while ((match = jsonPattern.exec(content)) !== null) {
+      try {
+        const toolName = match[1];
+        let argsStr = match[2];
+
+        // Try to find the complete JSON object for the arguments
+        // Start from the position of "parameters": or "arguments":
+        const startIdx = match.index;
+        let braceCount = 0;
+        let inString = false;
+        let escapeNext = false;
+        let argsStartIdx = -1;
+        let argsEndIdx = -1;
+
+        for (let i = startIdx; i < content.length; i++) {
+          const char = content[i];
+
+          if (escapeNext) {
+            escapeNext = false;
+            continue;
+          }
+
+          if (char === '\\') {
+            escapeNext = true;
+            continue;
+          }
+
+          if (char === '"' && !escapeNext) {
+            inString = !inString;
+            continue;
+          }
+
+          if (inString) continue;
+
+          if (char === '{' || char === '[') {
+            if (argsStartIdx === -1 && braceCount === 1) {
+              // This is the start of the parameters/arguments object
+              argsStartIdx = i;
+            }
+            braceCount++;
+          } else if (char === '}' || char === ']') {
+            braceCount--;
+            if (braceCount === 1 && argsStartIdx !== -1) {
+              argsEndIdx = i + 1;
+              break;
+            }
+          }
+        }
+
+        if (argsStartIdx !== -1 && argsEndIdx !== -1) {
+          argsStr = content.substring(argsStartIdx, argsEndIdx);
+        }
+
+        // Validate it's valid JSON
+        JSON.parse(argsStr);
+
+        toolCalls.push({
+          id: `call_${Date.now().toString(36)}_${callIndex++}`,
+          type: "function",
+          function: {
+            name: toolName,
+            arguments: argsStr,
+          },
+        });
+      } catch {
+        // Skip invalid JSON
+        continue;
+      }
+    }
+
+    // If no matches with the pattern, try a simpler line-by-line approach
+    if (toolCalls.length === 0) {
+      const lines = content.split('\n');
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('{') && trimmed.includes('"name"')) {
+          try {
+            const parsed = JSON.parse(trimmed);
+            if (parsed.name && (parsed.parameters || parsed.arguments)) {
+              const args = parsed.parameters || parsed.arguments;
+              toolCalls.push({
+                id: `call_${Date.now().toString(36)}_${callIndex++}`,
+                type: "function",
+                function: {
+                  name: parsed.name,
+                  arguments: typeof args === 'string' ? args : JSON.stringify(args),
+                },
+              });
+            }
+          } catch {
+            // Skip invalid JSON
+          }
+        }
+      }
+    }
+
+    return toolCalls;
   }
 }

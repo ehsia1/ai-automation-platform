@@ -125,15 +125,26 @@ export async function runAgentLoop(
 
       // Check if LLM wants to call tools
       if (response.tool_calls && response.tool_calls.length > 0) {
+        // SAFETY: Filter out github_create_draft_pr if called in same turn as github_get_file
+        // The LLM needs to wait for file content before creating a PR
+        const hasGetFile = response.tool_calls.some(tc => tc.function.name === "github_get_file");
+        const filteredToolCalls = response.tool_calls.filter(tc => {
+          if (tc.function.name === "github_create_draft_pr" && hasGetFile) {
+            console.warn("⚠️ Blocking github_create_draft_pr - must wait for github_get_file results first");
+            return false;
+          }
+          return true;
+        });
+
         // Add assistant message with tool calls
         state.messages.push({
           role: "assistant",
           content: response.content || "",
-          tool_calls: response.tool_calls,
+          tool_calls: filteredToolCalls,
         });
 
         // Process each tool call
-        for (const toolCall of response.tool_calls) {
+        for (const toolCall of filteredToolCalls) {
           const args = parseToolArgs(toolCall.function.arguments);
 
           await emit({

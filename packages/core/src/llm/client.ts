@@ -32,11 +32,24 @@ export function initializeLLM(config: LLMConfig): void {
 
 export function getProvider(): LLMProvider {
   if (!provider) {
-    // Default to Ollama for local development
-    provider = new OllamaProvider({
-      baseUrl: process.env.OLLAMA_BASE_URL || "http://localhost:11434",
-      model: process.env.OLLAMA_MODEL || "llama3.1:8b",
-    });
+    const llmProvider = process.env.LLM_PROVIDER || "ollama";
+
+    if (llmProvider === "anthropic") {
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) {
+        throw new Error("ANTHROPIC_API_KEY environment variable is required when using Anthropic provider");
+      }
+      provider = new AnthropicProvider({
+        apiKey,
+        model: process.env.ANTHROPIC_MODEL,
+      });
+    } else {
+      // Default to Ollama for local development
+      provider = new OllamaProvider({
+        baseUrl: process.env.OLLAMA_BASE_URL || "http://localhost:11434",
+        model: process.env.OLLAMA_MODEL || "llama3.1:8b",
+      });
+    }
   }
   return provider;
 }

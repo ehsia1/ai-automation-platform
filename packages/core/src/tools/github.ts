@@ -73,7 +73,7 @@ async function executeSearch(
   args: Record<string, unknown>,
   _context: ToolContext
 ): Promise<ToolResult> {
-  const { query, repo, language, path, max_results } = args as SearchCodeArgs;
+  const { query, repo, language, path, max_results } = args as unknown as SearchCodeArgs;
 
   if (!query) {
     return {
@@ -200,7 +200,7 @@ async function executeGetFile(
   args: Record<string, unknown>,
   _context: ToolContext
 ): Promise<ToolResult> {
-  const { repo, path, ref } = args as GetFileArgs;
+  const { repo, path, ref } = args as unknown as GetFileArgs;
 
   if (!repo || !path) {
     return {
@@ -337,9 +337,20 @@ const createPRDefinition: ToolDefinition = {
         },
         files: {
           type: "array",
-          description: "Array of file changes to include in the PR",
+          description: "Array of file changes to include in the PR. IMPORTANT: Each file's content must be the COMPLETE file content (not just changed lines) since it replaces the entire file.",
           items: {
             type: "object",
+            properties: {
+              path: {
+                type: "string",
+                description: "The file path relative to repo root (e.g., src/calculator.py)",
+              },
+              content: {
+                type: "string",
+                description: "The COMPLETE new content for the file. IMPORTANT: This replaces the entire file, so you must include ALL existing code (imports, functions, classes, etc.) with your changes applied. Do NOT provide only the changed lines - include the full file content.",
+              },
+            },
+            required: ["path", "content"],
           },
         },
       },
@@ -506,4 +517,122 @@ export const githubCreateDraftPRTool: Tool = {
   riskTier: "safe_write",
   definition: createPRDefinition,
   execute: executeCreatePR,
+};
+
+// ============================================================================
+// GitHub List Repository Files Tool
+// ============================================================================
+
+const LIST_FILES_TOOL_NAME = "github_list_files";
+
+interface ListFilesArgs {
+  repo: string;
+  path?: string;
+  ref?: string;
+}
+
+const listFilesDefinition: ToolDefinition = {
+  type: "function",
+  function: {
+    name: LIST_FILES_TOOL_NAME,
+    description:
+      "List files and directories in a GitHub repository. Use this to explore the repository structure and find relevant files before reading them. Start with the root path to understand the project layout.",
+    parameters: {
+      type: "object",
+      properties: {
+        repo: {
+          type: "string",
+          description: "Repository (format: owner/repo)",
+        },
+        path: {
+          type: "string",
+          description:
+            "Path within the repository to list. Defaults to root (''). Use 'src' to list src folder, etc.",
+        },
+        ref: {
+          type: "string",
+          description:
+            "Git ref (branch, tag, or commit SHA). Defaults to the default branch.",
+        },
+      },
+      required: ["repo"],
+    },
+  },
+};
+
+async function executeListFiles(
+  args: Record<string, unknown>,
+  _context: ToolContext
+): Promise<ToolResult> {
+  const { repo, path = "", ref } = args as unknown as ListFilesArgs;
+
+  if (!repo) {
+    return {
+      success: false,
+      output: "",
+      error: "Missing required parameter: repo",
+    };
+  }
+
+  const [owner, repoName] = repo.split("/");
+  if (!owner || !repoName) {
+    return {
+      success: false,
+      output: "",
+      error: "Invalid repo format. Use owner/repo (e.g., facebook/react)",
+    };
+  }
+
+  try {
+    const client = getOctokit();
+
+    const response = await client.repos.getContent({
+      owner,
+      repo: repoName,
+      path: path || "",
+      ref,
+    });
+
+    // Handle directory listing
+    if (!Array.isArray(response.data)) {
+      return {
+        success: false,
+        output: "",
+        error: "Path points to a file, not a directory. Use github_get_file to read it.",
+      };
+    }
+
+    // Format directory listing
+    const items = response.data.map((item) => {
+      const icon = item.type === "dir" ? "📁" : "📄";
+      const size = item.type === "file" ? ` (${item.size} bytes)` : "";
+      return `${icon} ${item.path}${size}`;
+    });
+
+    const pathDisplay = path || "(root)";
+    return {
+      success: true,
+      output: `Repository: ${repo}\nPath: ${pathDisplay}\n\nContents:\n${items.join("\n")}`,
+      metadata: {
+        repo,
+        path: path || "",
+        item_count: items.length,
+      },
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return {
+      success: false,
+      output: "",
+      error: `Failed to list files: ${errorMessage}`,
+    };
+  }
+}
+
+export const githubListFilesTool: Tool = {
+  name: LIST_FILES_TOOL_NAME,
+  description: listFilesDefinition.function.description,
+  riskTier: "read_only",
+  definition: listFilesDefinition,
+  execute: executeListFiles,
 };

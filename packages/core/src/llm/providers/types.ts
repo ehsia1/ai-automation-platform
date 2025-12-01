@@ -23,7 +23,11 @@ export interface ToolParameterProperty {
   type: "string" | "number" | "boolean" | "array" | "object";
   description: string;
   enum?: string[];
-  items?: { type: string };
+  items?: {
+    type: string;
+    properties?: Record<string, { type: string; description: string }>;
+    required?: string[];
+  };
 }
 
 export interface ToolCall {

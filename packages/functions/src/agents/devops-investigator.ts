@@ -15,7 +15,9 @@ import {
 
 // Initialize DynamoDB client
 const ddbClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(ddbClient);
+const docClient = DynamoDBDocumentClient.from(ddbClient, {
+  marshallOptions: { removeUndefinedValues: true },
+});
 
 // Event detail type for investigation requests
 interface InvestigationRequestDetail {

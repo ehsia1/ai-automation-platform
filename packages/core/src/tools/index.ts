@@ -11,6 +11,7 @@ import {
   githubSearchCodeTool,
   githubGetFileTool,
   githubCreateDraftPRTool,
+  githubListFilesTool,
 } from "./github";
 
 // Register all tools
@@ -21,6 +22,7 @@ export function registerAllTools(): void {
   // GitHub tools
   toolRegistry.register(githubSearchCodeTool); // read_only
   toolRegistry.register(githubGetFileTool); // read_only
+  toolRegistry.register(githubListFilesTool); // read_only
   toolRegistry.register(githubCreateDraftPRTool); // safe_write
 }
 
@@ -32,5 +34,6 @@ export { cloudwatchQueryLogsTool } from "./cloudwatch";
 export {
   githubSearchCodeTool,
   githubGetFileTool,
+  githubListFilesTool,
   githubCreateDraftPRTool,
 } from "./github";
