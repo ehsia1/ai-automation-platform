@@ -405,13 +405,100 @@ async function executeCreatePR(
   }
 
   // Normalize file structure - handle both 'path' and 'filename' keys
-  const normalizedFiles = (files as Array<{ path?: string; filename?: string; content: string }>).map(f => ({
-    path: f.path || f.filename || "unknown.txt",
-    content: f.content,
-  }));
+  // Also normalize content: convert literal \n escape sequences to actual newlines
+  // (LLMs sometimes output escaped newlines instead of actual newline characters)
+  const normalizedFiles = (files as Array<{ path?: string; filename?: string; content: string }>).map(f => {
+    let content = f.content;
+
+    // Check if content has literal \n instead of actual newlines
+    // A heuristic: if there are no actual newlines but there are literal \n sequences
+    if (!content.includes('\n') && content.includes('\\n')) {
+      // Replace literal \n with actual newlines
+      content = content.replace(/\\n/g, '\n');
+    }
+    // Also handle case where content has both (mixed) - likely the literal ones are wrong
+    // If the ratio of literal \n to actual newlines is high, normalize them
+    else if (content.includes('\\n')) {
+      const actualNewlines = (content.match(/\n/g) || []).length;
+      const literalNewlines = (content.match(/\\n/g) || []).length;
+
+      // If there are more literal than actual, the LLM probably meant real newlines
+      if (literalNewlines > actualNewlines) {
+        content = content.replace(/\\n/g, '\n');
+      }
+    }
+
+    // Also handle escaped tabs
+    if (content.includes('\\t')) {
+      content = content.replace(/\\t/g, '\t');
+    }
+
+    return {
+      path: f.path || f.filename || "unknown.txt",
+      content,
+    };
+  });
 
   try {
     const client = getOctokit();
+
+    // VALIDATION: Check that provided content is not suspiciously small
+    // This catches the common LLM mistake of providing only changed lines instead of the full file
+    for (const file of normalizedFiles) {
+      // Get the original file to compare sizes
+      try {
+        const originalResponse = await client.repos.getContent({
+          owner,
+          repo: repoName,
+          path: file.path,
+          ref: base,
+        });
+
+        if (!Array.isArray(originalResponse.data) && originalResponse.data.type === "file") {
+          const originalContent = Buffer.from(originalResponse.data.content, "base64").toString("utf8");
+          const originalSize = originalContent.length;
+          const newSize = file.content.length;
+
+          // Check if new content is suspiciously small compared to original
+          // Allow new files (original doesn't exist) or legitimate small files
+          const MIN_CONTENT_THRESHOLD = 50; // Minimum characters for a meaningful file
+          const SIZE_RATIO_THRESHOLD = 0.3; // New content should be at least 30% of original
+
+          if (originalSize > MIN_CONTENT_THRESHOLD && newSize < originalSize * SIZE_RATIO_THRESHOLD) {
+            // Include a snippet of the original file to help the LLM understand what's needed
+            const originalPreview = originalContent.substring(0, 300).replace(/\n/g, "\\n");
+            return {
+              success: false,
+              output: "",
+              error: `VALIDATION FAILED for file "${file.path}": ` +
+                `The provided content (${newSize} chars) is much smaller than the original file (${originalSize} chars). ` +
+                `You must provide the COMPLETE file, not just the changed lines. ` +
+                `The original file starts with: "${originalPreview}..." ` +
+                `Copy the ENTIRE original file content and apply your fix to it.`,
+            };
+          }
+
+          // Also check if content looks like just a diff/snippet (common LLM mistake)
+          const looksLikeSnippet =
+            file.content.includes("...") && newSize < 500 ||
+            file.content.startsWith("def ") && !file.content.includes("import") && originalContent.includes("import") ||
+            file.content.startsWith("function ") && !file.content.includes("import") && originalContent.includes("import");
+
+          if (looksLikeSnippet && originalSize > MIN_CONTENT_THRESHOLD) {
+            return {
+              success: false,
+              output: "",
+              error: `VALIDATION FAILED for file "${file.path}": ` +
+                `The provided content appears to be a code snippet rather than a complete file. ` +
+                `The original file has imports/headers that are missing from your content. ` +
+                `Please provide the COMPLETE file content with your changes applied.`,
+            };
+          }
+        }
+      } catch {
+        // File doesn't exist yet (new file) - that's OK, skip validation
+      }
+    }
 
     // 1. Get the base branch reference
     const baseRef = await client.git.getRef({
@@ -422,13 +509,29 @@ async function executeCreatePR(
 
     const baseSha = baseRef.data.object.sha;
 
-    // 2. Create a new branch from base
-    await client.git.createRef({
-      owner,
-      repo: repoName,
-      ref: `refs/heads/${head}`,
-      sha: baseSha,
-    });
+    // 2. Create a new branch from base (or update if exists)
+    try {
+      await client.git.createRef({
+        owner,
+        repo: repoName,
+        ref: `refs/heads/${head}`,
+        sha: baseSha,
+      });
+    } catch (refError) {
+      const errorMsg = refError instanceof Error ? refError.message : String(refError);
+      if (errorMsg.includes("Reference already exists")) {
+        // Branch exists - reset it to base branch
+        await client.git.updateRef({
+          owner,
+          repo: repoName,
+          ref: `heads/${head}`,
+          sha: baseSha,
+          force: true,
+        });
+      } else {
+        throw refError;
+      }
+    }
 
     // 3. Get the current tree
     const baseTree = await client.git.getTree({
@@ -480,25 +583,63 @@ async function executeCreatePR(
       sha: commit.data.sha,
     });
 
-    // 8. Create the draft PR
-    const pr = await client.pulls.create({
-      owner,
-      repo: repoName,
-      title,
-      body: body + "\n\n---\n_Created by AI On-Call Engineer_",
-      head,
-      base,
-      draft: true,
-    });
+    // 8. Create the draft PR (or find existing one)
+    let pr;
+    try {
+      pr = await client.pulls.create({
+        owner,
+        repo: repoName,
+        title,
+        body: body + "\n\n---\n_Created by AI On-Call Engineer_",
+        head,
+        base,
+        draft: true,
+      });
+    } catch (prError) {
+      const prErrorMsg = prError instanceof Error ? prError.message : String(prError);
+      if (prErrorMsg.includes("A pull request already exists")) {
+        // Find the existing PR
+        const existingPRs = await client.pulls.list({
+          owner,
+          repo: repoName,
+          head: `${owner}:${head}`,
+          base,
+          state: "open",
+        });
+
+        if (existingPRs.data.length > 0) {
+          // Update the existing PR with new title/body
+          pr = await client.pulls.update({
+            owner,
+            repo: repoName,
+            pull_number: existingPRs.data[0].number,
+            title,
+            body: body + "\n\n---\n_Updated by AI On-Call Engineer_",
+          });
+
+          return {
+            success: true,
+            output: `Existing PR updated successfully!\n\nTitle: ${title}\nPR URL: ${pr.data.html_url}\nBranch: ${head} → ${base}\nFiles changed: ${normalizedFiles.length}`,
+            metadata: {
+              pr_number: pr.data.number,
+              pr_url: pr.data.html_url,
+              branch: head,
+              files_changed: normalizedFiles.map((f) => f.path),
+            },
+          };
+        }
+      }
+      throw prError;
+    }
 
     return {
       success: true,
-      output: `Draft PR created successfully!\n\nTitle: ${title}\nPR URL: ${pr.data.html_url}\nBranch: ${head} → ${base}\nFiles changed: ${files.length}`,
+      output: `Draft PR created successfully!\n\nTitle: ${title}\nPR URL: ${pr.data.html_url}\nBranch: ${head} → ${base}\nFiles changed: ${normalizedFiles.length}`,
       metadata: {
         pr_number: pr.data.number,
         pr_url: pr.data.html_url,
         branch: head,
-        files_changed: files.map((f) => f.path),
+        files_changed: normalizedFiles.map((f) => f.path),
       },
     };
   } catch (error) {

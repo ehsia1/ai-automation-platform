@@ -169,13 +169,36 @@ export class OllamaProvider implements LLMProvider {
    */
   private parseToolCallsFromContent(content: string): ToolCall[] {
     const toolCalls: ToolCall[] = [];
+    let callIndex = 0;
+
+    // First, try to find and parse a complete JSON object from the content
+    // This handles the case where the entire response is a JSON tool call
+    const fullJsonMatch = this.extractCompleteJson(content);
+    if (fullJsonMatch) {
+      try {
+        const parsed = JSON.parse(fullJsonMatch);
+        if (parsed.name && (parsed.parameters || parsed.arguments)) {
+          const args = parsed.parameters || parsed.arguments;
+          toolCalls.push({
+            id: `call_${Date.now().toString(36)}_${callIndex++}`,
+            type: "function",
+            function: {
+              name: parsed.name,
+              arguments: typeof args === 'string' ? args : JSON.stringify(args),
+            },
+          });
+          return toolCalls;
+        }
+      } catch {
+        // Continue with other parsing methods
+      }
+    }
 
     // Match JSON objects that look like tool calls
     // Pattern: {"name": "...", "parameters": {...}} or {"name": "...", "arguments": {...}}
     const jsonPattern = /\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"(?:parameters|arguments)"\s*:\s*(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}|\[[^\[\]]*\]|"[^"]*")/g;
 
     let match;
-    let callIndex = 0;
 
     while ((match = jsonPattern.exec(content)) !== null) {
       try {
@@ -274,5 +297,51 @@ export class OllamaProvider implements LLMProvider {
     }
 
     return toolCalls;
+  }
+
+  /**
+   * Extract a complete JSON object from content, handling nested braces and strings properly
+   */
+  private extractCompleteJson(content: string): string | null {
+    // Find the first { and try to extract a complete JSON object
+    const firstBrace = content.indexOf('{');
+    if (firstBrace === -1) return null;
+
+    let braceCount = 0;
+    let inString = false;
+    let escapeNext = false;
+
+    for (let i = firstBrace; i < content.length; i++) {
+      const char = content[i];
+
+      if (escapeNext) {
+        escapeNext = false;
+        continue;
+      }
+
+      if (char === '\\') {
+        escapeNext = true;
+        continue;
+      }
+
+      if (char === '"') {
+        inString = !inString;
+        continue;
+      }
+
+      if (inString) continue;
+
+      if (char === '{') {
+        braceCount++;
+      } else if (char === '}') {
+        braceCount--;
+        if (braceCount === 0) {
+          // Found the complete JSON object
+          return content.substring(firstBrace, i + 1);
+        }
+      }
+    }
+
+    return null;
   }
 }
