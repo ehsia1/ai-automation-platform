@@ -45,9 +45,22 @@ export interface LLMToolResponse {
   finish_reason: "stop" | "tool_calls" | "length";
 }
 
+export interface LLMRetryOptions {
+  /** Maximum number of retry attempts (default: 3) */
+  maxRetries?: number;
+  /** Initial delay in milliseconds (default: 1000) */
+  initialDelayMs?: number;
+  /** Maximum delay in milliseconds (default: 30000) */
+  maxDelayMs?: number;
+  /** Callback fired before each retry attempt */
+  onRetry?: (error: unknown, attempt: number, delayMs: number) => void;
+}
+
 export interface LLMCompletionOptions {
   temperature?: number;
   maxTokens?: number;
+  /** Retry configuration (enabled by default) */
+  retry?: LLMRetryOptions | false;
 }
 
 export interface LLMCompletionWithToolsOptions extends LLMCompletionOptions {

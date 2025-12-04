@@ -5,9 +5,11 @@ import type {
   LLMCompletionWithToolsOptions,
   LLMToolResponse,
   LLMConfig,
+  LLMRetryOptions,
 } from "./providers/types";
 import { OllamaProvider } from "./providers/ollama";
 import { AnthropicProvider } from "./providers/anthropic";
+import { withRetry, type RetryOptions } from "./retry";
 
 let provider: LLMProvider | null = null;
 
@@ -54,11 +56,52 @@ export function getProvider(): LLMProvider {
   return provider;
 }
 
+/**
+ * Convert LLM retry options to internal retry options
+ */
+function toRetryOptions(
+  retryConfig: LLMRetryOptions | false | undefined
+): RetryOptions | undefined {
+  if (retryConfig === false) {
+    return { maxRetries: 0 };
+  }
+  if (!retryConfig) {
+    // Default retry options
+    return {
+      maxRetries: 3,
+      initialDelayMs: 1000,
+      maxDelayMs: 30000,
+      onRetry: (error, attempt, delayMs) => {
+        console.warn(
+          `LLM call failed, retrying (attempt ${attempt}, delay ${delayMs}ms):`,
+          error instanceof Error ? error.message : error
+        );
+      },
+    };
+  }
+  return {
+    ...retryConfig,
+    onRetry:
+      retryConfig.onRetry ??
+      ((error, attempt, delayMs) => {
+        console.warn(
+          `LLM call failed, retrying (attempt ${attempt}, delay ${delayMs}ms):`,
+          error instanceof Error ? error.message : error
+        );
+      }),
+  };
+}
+
 export async function complete(
   messages: LLMMessage[],
   options?: LLMCompletionOptions
 ): Promise<string> {
-  return getProvider().complete(messages, options);
+  const retryOpts = toRetryOptions(options?.retry);
+
+  return withRetry(
+    () => getProvider().complete(messages, options),
+    retryOpts
+  );
 }
 
 export async function completeWithTools(
@@ -71,7 +114,10 @@ export async function completeWithTools(
       "Tool calling is not supported by the current LLM provider"
     );
   }
-  return p.completeWithTools(messages, options);
+
+  const retryOpts = toRetryOptions(options?.retry);
+
+  return withRetry(() => p.completeWithTools!(messages, options), retryOpts);
 }
 
 export async function completeJSON<T>(
