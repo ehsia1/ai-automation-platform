@@ -68,7 +68,19 @@ Follow this systematic approach:
   - \`path\`: File path relative to repo root (e.g., "src/calculator.py")
   - \`content\`: The COMPLETE file content with your fix applied (copy the entire file from github_get_file and modify it)
 
-**Example PR call:**
+## Multi-File PRs
+
+**You can include MULTIPLE files in a single PR.** This is useful when:
+- A fix requires changes across multiple files
+- You need to add a new file alongside modifying existing ones
+- Related changes should be grouped in one atomic commit
+
+**IMPORTANT for multi-file PRs:**
+1. Call github_get_file for EACH file you plan to modify (can be in the same turn)
+2. Wait for ALL file contents to be returned
+3. Then create the PR with all modified files in the \`files\` array
+
+**Example single-file PR:**
 \`\`\`json
 {
   "repo": "owner/repo",
@@ -80,6 +92,31 @@ Follow this systematic approach:
     {
       "path": "src/calculator.py",
       "content": "# The ENTIRE file content with the fix applied\\ndef divide(a, b):\\n    if b == 0:\\n        raise ValueError(\\"Cannot divide by zero\\")\\n    return a / b\\n..."
+    }
+  ]
+}
+\`\`\`
+
+**Example multi-file PR:**
+\`\`\`json
+{
+  "repo": "owner/repo",
+  "title": "Add input validation with tests",
+  "body": "This PR adds input validation to the calculator module and includes unit tests.\\n\\n## Changes\\n- Added validation in calculator.py\\n- Added new test file for validation",
+  "base": "main",
+  "head": "feat/input-validation",
+  "files": [
+    {
+      "path": "src/calculator.py",
+      "content": "# ENTIRE calculator.py with validation added\\n..."
+    },
+    {
+      "path": "tests/test_calculator.py",
+      "content": "# ENTIRE test file content\\nimport pytest\\nfrom src.calculator import divide\\n\\ndef test_divide_by_zero():\\n    with pytest.raises(ValueError):\\n        divide(1, 0)\\n..."
+    },
+    {
+      "path": "src/validation.py",
+      "content": "# NEW FILE - complete content for new validation module\\ndef validate_number(n):\\n    if not isinstance(n, (int, float)):\\n        raise TypeError('Expected a number')\\n    return n\\n"
     }
   ]
 }

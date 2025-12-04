@@ -40,6 +40,12 @@ export interface AgentState {
     result: ToolResult;
     timestamp: string;
   }>;
+  // Track files that have been successfully read via github_get_file
+  // Format: "owner/repo:path" -> true
+  successfullyReadFiles?: Record<string, boolean>;
+  // Track files that are known to exist in the repo (from github_list_files)
+  // Format: "owner/repo:path" -> true
+  knownExistingFiles?: Record<string, boolean>;
 }
 
 // Events emitted during agent execution
@@ -82,6 +88,58 @@ async function executeTool(
 // Default timeout: 5 minutes
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 
+// Helper to validate that files in a PR have been successfully read first
+// IMPORTANT: Only EXISTING files need to be read before modification.
+// New files (not seen in github_list_files) can be created without reading.
+function validatePRFilesWereRead(
+  prArgs: Record<string, unknown>,
+  successfullyReadFiles: Record<string, boolean>,
+  knownExistingFiles: Record<string, boolean>
+): { valid: boolean; missingFiles: string[]; newFiles: string[] } {
+  const repo = prArgs.repo as string;
+  let files = prArgs.files as Array<{ path?: string; filename?: string }> | string | undefined;
+
+  // Handle files passed as JSON string
+  if (typeof files === "string") {
+    try {
+      files = JSON.parse(files) as Array<{ path?: string; filename?: string }>;
+    } catch {
+      return { valid: false, missingFiles: ["(invalid files array)"], newFiles: [] };
+    }
+  }
+
+  if (!Array.isArray(files) || files.length === 0) {
+    return { valid: false, missingFiles: ["(no files specified)"], newFiles: [] };
+  }
+
+  const missingFiles: string[] = [];
+  const newFiles: string[] = [];
+
+  for (const file of files) {
+    const path = file.path || file.filename;
+    if (!path) continue;
+
+    const key = `${repo}:${path}`;
+    const fileExists = knownExistingFiles[key];
+    const fileWasRead = successfullyReadFiles[key];
+
+    if (fileExists && !fileWasRead) {
+      // File exists but wasn't read - this is the dangerous case we want to block
+      missingFiles.push(path);
+    } else if (!fileExists) {
+      // File doesn't exist (new file) - that's fine, just track it
+      newFiles.push(path);
+    }
+    // else: File exists and was read - good to go
+  }
+
+  return {
+    valid: missingFiles.length === 0,
+    missingFiles,
+    newFiles,
+  };
+}
+
 // Minimum time needed to start a new iteration (30 seconds for LLM call + buffer)
 const MIN_ITERATION_TIME_MS = 30 * 1000;
 
@@ -102,7 +160,17 @@ export async function runAgentLoop(
     ],
     iterations: 0,
     toolCallHistory: [],
+    successfullyReadFiles: {},
+    knownExistingFiles: {},
   };
+
+  // Ensure tracking objects are initialized for restored states
+  if (!state.successfullyReadFiles) {
+    state.successfullyReadFiles = {};
+  }
+  if (!state.knownExistingFiles) {
+    state.knownExistingFiles = {};
+  }
 
   // If resuming from paused state with approved tool call
   if (state.status === "paused" && state.pendingApproval) {
@@ -204,16 +272,91 @@ export async function runAgentLoop(
 
       // Check if LLM wants to call tools
       if (response.tool_calls && response.tool_calls.length > 0) {
-        // SAFETY: Filter out github_create_draft_pr if called in same turn as github_get_file
-        // The LLM needs to wait for file content before creating a PR
+        // SAFETY: Filter out invalid tool calls
         const hasGetFile = response.tool_calls.some(tc => tc.function.name === "github_get_file");
         const filteredToolCalls = response.tool_calls.filter(tc => {
+          // Rule 1: Block github_create_draft_pr if called in same turn as github_get_file
+          // The LLM needs to wait for file content before creating a PR
           if (tc.function.name === "github_create_draft_pr" && hasGetFile) {
             console.warn("⚠️ Blocking github_create_draft_pr - must wait for github_get_file results first");
             return false;
           }
+
+          // Rule 2: Block github_create_draft_pr if trying to modify EXISTING files that weren't read
+          // New files (not in knownExistingFiles) are allowed without reading
+          if (tc.function.name === "github_create_draft_pr") {
+            const args = parseToolArgs(tc.function.arguments);
+            const validation = validatePRFilesWereRead(
+              args,
+              state.successfullyReadFiles || {},
+              state.knownExistingFiles || {}
+            );
+            if (!validation.valid) {
+              console.warn(
+                `⚠️ Blocking github_create_draft_pr - existing files not read first: ${validation.missingFiles.join(", ")}`
+              );
+              if (validation.newFiles.length > 0) {
+                console.log(`ℹ️ New files allowed: ${validation.newFiles.join(", ")}`);
+              }
+              // We'll let this through but add a synthetic tool result explaining the error
+              // This way the LLM knows what went wrong and can fix it
+              return false;
+            }
+          }
+
           return true;
         });
+
+        // If we blocked PR creation due to unread files, add an error message
+        const blockedPRCalls = response.tool_calls.filter(tc => {
+          if (tc.function.name !== "github_create_draft_pr") return false;
+          if (hasGetFile) return true; // Blocked by rule 1
+          const args = parseToolArgs(tc.function.arguments);
+          const validation = validatePRFilesWereRead(
+            args,
+            state.successfullyReadFiles || {},
+            state.knownExistingFiles || {}
+          );
+          return !validation.valid;
+        });
+
+        if (blockedPRCalls.length > 0) {
+          // Add a message explaining why PR creation was blocked
+          const prArgs = parseToolArgs(blockedPRCalls[0].function.arguments);
+          const validation = validatePRFilesWereRead(
+            prArgs,
+            state.successfullyReadFiles || {},
+            state.knownExistingFiles || {}
+          );
+
+          state.messages.push({
+            role: "assistant",
+            content: response.content || "",
+            tool_calls: blockedPRCalls,
+          });
+
+          let errorMessage = `⛔ PR CREATION BLOCKED: You must read EXISTING files first using github_get_file before modifying them.\n\n` +
+            `Files that EXIST but were NOT READ: ${validation.missingFiles.join(", ")}\n\n`;
+
+          if (validation.newFiles.length > 0) {
+            errorMessage += `(New files are allowed: ${validation.newFiles.join(", ")})\n\n`;
+          }
+
+          errorMessage += `Please:\n` +
+            `1. Use github_list_files to explore the repository structure\n` +
+            `2. Use github_get_file to read the COMPLETE content of each EXISTING file you want to modify\n` +
+            `3. For NEW files, you can include them without reading first\n` +
+            `4. Then call github_create_draft_pr with the full file content (including your changes)`;
+
+          state.messages.push({
+            role: "tool",
+            content: errorMessage,
+            tool_call_id: blockedPRCalls[0].id,
+          });
+
+          // Continue to next iteration so LLM can fix its mistake
+          continue;
+        }
 
         // Add assistant message with tool calls
         state.messages.push({
@@ -286,6 +429,45 @@ export async function runAgentLoop(
               error: result.error,
             },
           });
+
+          // Track successful github_get_file calls for PR validation
+          if (toolCall.function.name === "github_get_file" && result.success) {
+            const repo = args.repo as string;
+            const path = args.path as string;
+            if (repo && path) {
+              const key = `${repo}:${path}`;
+              state.successfullyReadFiles = state.successfullyReadFiles || {};
+              state.successfullyReadFiles[key] = true;
+              // Also mark it as existing since we successfully read it
+              state.knownExistingFiles = state.knownExistingFiles || {};
+              state.knownExistingFiles[key] = true;
+              console.log(`✅ Tracked successful file read: ${key}`);
+            }
+          }
+
+          // Track files discovered via github_list_files for PR validation
+          // This helps distinguish new files from existing files in multi-file PRs
+          if (toolCall.function.name === "github_list_files" && result.success) {
+            const repo = args.repo as string;
+            const basePath = (args.path as string) || "";
+            if (repo && result.output) {
+              // Parse the output to extract file paths
+              // Format: "📄 path/to/file.py (123 bytes)" or "📁 path/to/dir"
+              const lines = result.output.split("\n");
+              state.knownExistingFiles = state.knownExistingFiles || {};
+              for (const line of lines) {
+                // Match file lines (📄 prefix)
+                const fileMatch = line.match(/^📄\s+(\S+)/);
+                if (fileMatch) {
+                  const filePath = fileMatch[1];
+                  const key = `${repo}:${filePath}`;
+                  state.knownExistingFiles[key] = true;
+                }
+              }
+              const fileCount = Object.keys(state.knownExistingFiles).filter(k => k.startsWith(`${repo}:`)).length;
+              console.log(`📂 Tracked ${fileCount} known files in ${repo}`);
+            }
+          }
 
           // Record in history
           state.toolCallHistory.push({
