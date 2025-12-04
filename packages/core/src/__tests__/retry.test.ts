@@ -1,13 +1,13 @@
 /**
  * Tests for retry utility
- * Run with: npx tsx packages/core/src/llm/retry.test.ts
+ * Run with: npx tsx packages/core/src/__tests__/retry.test.ts
  */
 
 import {
   withRetry,
   isRetryableError,
   RetryableError,
-} from "./retry";
+} from "../llm/retry";
 
 async function test(name: string, fn: () => Promise<void>) {
   try {

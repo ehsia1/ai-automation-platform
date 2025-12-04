@@ -7,6 +7,11 @@ import {
   type ToolContext,
   type ToolResult,
 } from "../tools";
+import {
+  TimeoutController,
+  AgentTimeoutError,
+  withTimeout,
+} from "./timeout";
 
 // Agent configuration
 export interface AgentConfig {
@@ -45,7 +50,8 @@ export type AgentEvent =
   | { type: "approval_required"; toolName: string; args: Record<string, unknown>; toolCallId: string }
   | { type: "llm_response"; content: string }
   | { type: "completed"; result: string }
-  | { type: "failed"; error: string };
+  | { type: "failed"; error: string }
+  | { type: "timeout"; elapsedMs: number; iteration: number; lastToolCall?: string };
 
 export type AgentEventHandler = (event: AgentEvent) => void | Promise<void>;
 
@@ -72,6 +78,12 @@ async function executeTool(
     error: result.error,
   };
 }
+
+// Default timeout: 5 minutes
+const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
+
+// Minimum time needed to start a new iteration (30 seconds for LLM call + buffer)
+const MIN_ITERATION_TIME_MS = 30 * 1000;
 
 // Main agent loop
 export async function runAgentLoop(
@@ -107,21 +119,88 @@ export async function runAgentLoop(
     }
   };
 
+  // Set up timeout controller if configured
+  const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  let lastToolCall: string | undefined;
+
+  const timeoutController = new TimeoutController(timeoutMs, () => {
+    console.warn(
+      `Agent timeout triggered after ${timeoutController.elapsedMs}ms ` +
+      `(iteration ${state.iterations}, last tool: ${lastToolCall ?? "none"})`
+    );
+  });
+
+  // Start the timeout timer
+  timeoutController.start();
+
   // Get tool definitions
   const tools = toolRegistry.getDefinitions();
 
   // Main loop
   while (state.iterations < config.maxIterations && state.status === "running") {
+    // Check if we have enough time to start a new iteration
+    if (!timeoutController.hasTimeFor(MIN_ITERATION_TIME_MS)) {
+      console.warn(
+        `Insufficient time remaining (${timeoutController.remainingMs}ms) for new iteration, ` +
+        `stopping gracefully at iteration ${state.iterations}`
+      );
+
+      await emit({
+        type: "timeout",
+        elapsedMs: timeoutController.elapsedMs,
+        iteration: state.iterations,
+        lastToolCall,
+      });
+
+      // Graceful timeout - save progress
+      state.status = "completed";
+      state.result =
+        `Investigation timed out after ${Math.round(timeoutController.elapsedMs / 1000)}s. ` +
+        `Completed ${state.iterations} iterations. Here's what I found:\n\n` +
+        state.messages
+          .filter((m) => m.role === "assistant" && m.content)
+          .map((m) => m.content)
+          .join("\n\n");
+
+      await emit({ type: "completed", result: state.result });
+      timeoutController.stop();
+      return state;
+    }
+
+    // Check if already timed out
+    if (timeoutController.isTimedOut) {
+      await emit({
+        type: "timeout",
+        elapsedMs: timeoutController.elapsedMs,
+        iteration: state.iterations,
+        lastToolCall,
+      });
+
+      state.status = "failed";
+      state.error = `Agent timed out after ${timeoutController.elapsedMs}ms`;
+      timeoutController.stop();
+      return state;
+    }
+
     state.iterations++;
     await emit({ type: "iteration_start", iteration: state.iterations });
 
     try {
-      // Call LLM with tools
-      const response = await completeWithTools(state.messages, {
-        tools,
-        temperature: 0.2, // Lower temperature for more focused responses
-        maxTokens: 4096,
-      });
+      // Call LLM with tools (with per-call timeout based on remaining time)
+      const llmTimeoutMs = Math.min(
+        timeoutController.remainingMs - 5000, // Leave 5s buffer
+        60000 // Max 60s per LLM call
+      );
+
+      const response = await withTimeout(
+        completeWithTools(state.messages, {
+          tools,
+          temperature: 0.2, // Lower temperature for more focused responses
+          maxTokens: 4096,
+        }),
+        llmTimeoutMs,
+        `LLM call timed out after ${llmTimeoutMs}ms`
+      );
 
       // Check if LLM wants to call tools
       if (response.tool_calls && response.tool_calls.length > 0) {
@@ -195,6 +274,7 @@ export async function runAgentLoop(
           }
 
           // Execute the tool
+          lastToolCall = toolCall.function.name;
           const result = await executeTool(toolCall, context);
 
           await emit({
@@ -242,6 +322,7 @@ export async function runAgentLoop(
         state.result = finalContent;
 
         await emit({ type: "completed", result: finalContent });
+        timeoutController.stop();
         return state;
       }
     } catch (error) {
@@ -250,6 +331,7 @@ export async function runAgentLoop(
       state.error = errorMessage;
 
       await emit({ type: "failed", error: errorMessage });
+      timeoutController.stop();
       return state;
     }
   }
@@ -267,6 +349,7 @@ export async function runAgentLoop(
     await emit({ type: "completed", result: state.result });
   }
 
+  timeoutController.stop();
   return state;
 }
 
