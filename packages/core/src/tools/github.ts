@@ -777,3 +777,101 @@ export const githubListFilesTool: Tool = {
   definition: listFilesDefinition,
   execute: executeListFiles,
 };
+
+// ============================================================================
+// GitHub Create Single File PR Tool (Simpler version for smaller LLMs)
+// ============================================================================
+
+const CREATE_SINGLE_FILE_PR_TOOL_NAME = "github_create_single_file_pr";
+
+interface CreateSingleFilePRArgs {
+  repo: string;
+  title: string;
+  description: string;
+  branch_name: string;
+  file_path: string;
+  file_content: string;
+}
+
+const createSingleFilePRDefinition: ToolDefinition = {
+  type: "function",
+  function: {
+    name: CREATE_SINGLE_FILE_PR_TOOL_NAME,
+    description:
+      "Create a draft pull request that modifies a single file. SIMPLER than github_create_draft_pr - use this when fixing ONE file. The file_content must be the COMPLETE file (copy the entire file from github_get_file and apply your fix).",
+    parameters: {
+      type: "object",
+      properties: {
+        repo: {
+          type: "string",
+          description: "Repository (format: owner/repo, e.g., ehsia1/ai-oncall-test)",
+        },
+        title: {
+          type: "string",
+          description: "PR title (e.g., Fix division by zero error)",
+        },
+        description: {
+          type: "string",
+          description: "PR description explaining the fix (plain text, no code)",
+        },
+        branch_name: {
+          type: "string",
+          description: "New branch name (e.g., fix/divide-by-zero)",
+        },
+        file_path: {
+          type: "string",
+          description: "Path to the file being modified (e.g., src/calculator.py)",
+        },
+        file_content: {
+          type: "string",
+          description: "The COMPLETE new file content. CRITICAL: Copy the ENTIRE file from github_get_file, apply your fix, and paste all of it here. Must include all imports, all functions, everything.",
+        },
+      },
+      required: ["repo", "title", "description", "branch_name", "file_path", "file_content"],
+    },
+  },
+};
+
+async function executeCreateSingleFilePR(
+  args: Record<string, unknown>,
+  context: ToolContext
+): Promise<ToolResult> {
+  const { repo, title, description, branch_name, file_path, file_content } =
+    args as unknown as CreateSingleFilePRArgs;
+
+  // Validate all required fields are present
+  if (!repo || !title || !description || !branch_name || !file_path || !file_content) {
+    const missing = [];
+    if (!repo) missing.push("repo");
+    if (!title) missing.push("title");
+    if (!description) missing.push("description");
+    if (!branch_name) missing.push("branch_name");
+    if (!file_path) missing.push("file_path");
+    if (!file_content) missing.push("file_content");
+    return {
+      success: false,
+      output: "",
+      error: `Missing required parameters: ${missing.join(", ")}. All 6 parameters are required.`,
+    };
+  }
+
+  // Convert to the multi-file format and reuse existing implementation
+  const multiFileArgs = {
+    repo,
+    title,
+    body: description,
+    base: "main",
+    head: branch_name,
+    files: [{ path: file_path, content: file_content }],
+  };
+
+  return executeCreatePR(multiFileArgs, context);
+}
+
+export const githubCreateSingleFilePRTool: Tool = {
+  name: CREATE_SINGLE_FILE_PR_TOOL_NAME,
+  description: createSingleFilePRDefinition.function.description,
+  riskTier: "safe_write",
+  definition: createSingleFilePRDefinition,
+  execute: executeCreateSingleFilePR,
+};

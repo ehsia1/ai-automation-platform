@@ -71,6 +71,149 @@ function parseToolArgs(argsString: string): Record<string, unknown> {
   }
 }
 
+// Extract tool call from text when LLM outputs JSON instead of using function calling
+// This rescues tool calls that small local LLMs sometimes output as text
+function extractToolCallFromText(text: string): { name: string; parameters: Record<string, unknown> } | null {
+  // Known tool names we're looking for
+  const toolNames = [
+    "github_create_single_file_pr",
+    "github_create_draft_pr",
+    "github_get_file",
+    "github_list_files",
+    "github_search_code",
+    "cloudwatch_query_logs",
+  ];
+
+  // Try to find any JSON object that looks like a tool call
+  // Pattern: {"name": "tool_name", "parameters": {...}}
+  for (const toolName of toolNames) {
+    // Check if this tool name appears in the text
+    if (!text.includes(toolName)) continue;
+
+    // Try to find the JSON structure
+    const namePattern = new RegExp(`"name"\\s*:\\s*"${toolName}"`, "i");
+    if (namePattern.test(text)) {
+      // Find the start of the JSON object containing this
+      const nameMatch = text.match(namePattern);
+      if (!nameMatch) continue;
+
+      const nameIdx = text.indexOf(nameMatch[0]);
+      // Find the opening brace before the "name" key
+      let startIdx = nameIdx;
+      for (let i = nameIdx - 1; i >= 0; i--) {
+        if (text[i] === "{") {
+          startIdx = i;
+          break;
+        }
+      }
+
+      // Find the complete JSON object using brace matching
+      let braceCount = 0;
+      let endIdx = startIdx;
+      let inString = false;
+      let escapeNext = false;
+
+      for (let i = startIdx; i < text.length; i++) {
+        const char = text[i];
+
+        if (escapeNext) {
+          escapeNext = false;
+          continue;
+        }
+
+        if (char === "\\") {
+          escapeNext = true;
+          continue;
+        }
+
+        if (char === '"' && !escapeNext) {
+          inString = !inString;
+          continue;
+        }
+
+        if (!inString) {
+          if (char === "{") braceCount++;
+          if (char === "}") braceCount--;
+          if (braceCount === 0) {
+            endIdx = i + 1;
+            break;
+          }
+        }
+      }
+
+      if (endIdx > startIdx) {
+        const fullJson = text.substring(startIdx, endIdx);
+        try {
+          const parsed = JSON.parse(fullJson);
+          if (parsed.name === toolName && parsed.parameters) {
+            console.log(`🔍 Extracted tool call pattern 1: ${toolName}`);
+            return { name: toolName, parameters: parsed.parameters };
+          }
+        } catch (e) {
+          console.log(`⚠️ JSON parse failed for pattern 1: ${e}`);
+        }
+      }
+    }
+  }
+
+  // Pattern 2: Look for a JSON object with tool-specific parameters (no wrapper)
+  // For github_create_single_file_pr: must have repo, branch_name, file_path, file_content
+  if (text.includes("file_content") && text.includes("branch_name")) {
+    // Find the first { that starts a potential tool call
+    const startIdx = text.indexOf("{");
+    if (startIdx >= 0) {
+      let braceCount = 0;
+      let endIdx = startIdx;
+      let inString = false;
+      let escapeNext = false;
+
+      for (let i = startIdx; i < text.length; i++) {
+        const char = text[i];
+
+        if (escapeNext) {
+          escapeNext = false;
+          continue;
+        }
+
+        if (char === "\\") {
+          escapeNext = true;
+          continue;
+        }
+
+        if (char === '"' && !escapeNext) {
+          inString = !inString;
+          continue;
+        }
+
+        if (!inString) {
+          if (char === "{") braceCount++;
+          if (char === "}") braceCount--;
+          if (braceCount === 0) {
+            endIdx = i + 1;
+            break;
+          }
+        }
+      }
+
+      if (endIdx > startIdx) {
+        const fullJson = text.substring(startIdx, endIdx);
+        try {
+          const parameters = JSON.parse(fullJson);
+          // Check if this looks like a single-file PR call
+          if (parameters.repo && parameters.branch_name && parameters.file_path && parameters.file_content) {
+            console.log(`🔍 Extracted tool call pattern 2: github_create_single_file_pr`);
+            return { name: "github_create_single_file_pr", parameters };
+          }
+        } catch (e) {
+          console.log(`⚠️ JSON parse failed for pattern 2: ${e}`);
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
 // Execute a single tool call
 async function executeTool(
   toolCall: ToolCall,
@@ -285,7 +428,22 @@ export async function runAgentLoop(
           // Rule 2: Block github_create_draft_pr if trying to modify EXISTING files that weren't read
           // New files (not in knownExistingFiles) are allowed without reading
           if (tc.function.name === "github_create_draft_pr") {
+            // Debug: log the raw arguments string from the LLM
+            console.log(`🔍 DEBUG github_create_draft_pr RAW arguments:`, tc.function.arguments);
             const args = parseToolArgs(tc.function.arguments);
+            // Debug: log what the LLM is passing for files
+            console.log(`🔍 DEBUG github_create_draft_pr parsed args keys:`, Object.keys(args));
+            console.log(`🔍 DEBUG github_create_draft_pr args:`, JSON.stringify({
+              hasFiles: "files" in args,
+              filesType: typeof args.files,
+              filesIsArray: Array.isArray(args.files),
+              filesLength: Array.isArray(args.files) ? args.files.length : "N/A",
+              filesPreview: typeof args.files === "string"
+                ? args.files.substring(0, 200)
+                : Array.isArray(args.files)
+                  ? JSON.stringify(args.files).substring(0, 200)
+                  : String(args.files)
+            }, null, 2));
             const validation = validatePRFilesWereRead(
               args,
               state.successfullyReadFiles || {},
@@ -490,20 +648,168 @@ export async function runAgentLoop(
           });
         }
       } else {
-        // No tool calls - LLM is done
-        const finalContent = response.content || "Investigation complete.";
+        // No tool calls - LLM returned text only
+        let textContent = response.content || "Investigation complete.";
 
+        // RESCUE LOGIC: Detect tool calls embedded as JSON in text response
+        // Small local LLMs sometimes output tool calls as JSON text instead of using function calling
+        const extractedToolCall = extractToolCallFromText(textContent);
+        if (extractedToolCall) {
+          console.log(`🔧 Rescued tool call from text: ${extractedToolCall.name}`);
+
+          // Create a synthetic tool call and process it
+          const syntheticToolCall: ToolCall = {
+            id: `rescued_${Date.now()}`,
+            type: "function",
+            function: {
+              name: extractedToolCall.name,
+              arguments: JSON.stringify(extractedToolCall.parameters),
+            },
+          };
+
+          // Add assistant message with the rescued tool call
+          state.messages.push({
+            role: "assistant",
+            content: "", // Clear the text since we're converting it to a tool call
+            tool_calls: [syntheticToolCall],
+          });
+
+          const args = extractedToolCall.parameters;
+
+          await emit({
+            type: "tool_call",
+            toolName: syntheticToolCall.function.name,
+            args,
+          });
+
+          // Check if tool requires approval
+          if (requiresApproval(syntheticToolCall.function.name)) {
+            state.status = "paused";
+            state.pendingApproval = {
+              toolCallId: syntheticToolCall.id,
+              toolName: syntheticToolCall.function.name,
+              toolArgs: args,
+              requestedAt: new Date().toISOString(),
+            };
+
+            await emit({
+              type: "approval_required",
+              toolName: syntheticToolCall.function.name,
+              args,
+              toolCallId: syntheticToolCall.id,
+            });
+
+            return state;
+          }
+
+          // Execute the rescued tool call
+          lastToolCall = syntheticToolCall.function.name;
+          const result = await executeTool(syntheticToolCall, context);
+
+          await emit({
+            type: "tool_result",
+            toolName: syntheticToolCall.function.name,
+            result: {
+              success: result.success,
+              output: result.output,
+              error: result.error,
+            },
+          });
+
+          // Track successful github_get_file calls
+          if (syntheticToolCall.function.name === "github_get_file" && result.success) {
+            const repo = args.repo as string;
+            const path = args.path as string;
+            if (repo && path) {
+              const key = `${repo}:${path}`;
+              state.successfullyReadFiles = state.successfullyReadFiles || {};
+              state.successfullyReadFiles[key] = true;
+              state.knownExistingFiles = state.knownExistingFiles || {};
+              state.knownExistingFiles[key] = true;
+              console.log(`✅ Tracked successful file read (rescued): ${key}`);
+            }
+          }
+
+          // Record in history
+          state.toolCallHistory.push({
+            iteration: state.iterations,
+            toolName: syntheticToolCall.function.name,
+            args,
+            result: {
+              success: result.success,
+              output: result.output,
+              error: result.error,
+            },
+            timestamp: new Date().toISOString(),
+          });
+
+          // Add tool result to messages
+          state.messages.push({
+            role: "tool",
+            content: result.output,
+            tool_call_id: syntheticToolCall.id,
+          });
+
+          // Continue to next iteration
+          continue;
+        }
+
+        // Check if the LLM stopped prematurely without completing key steps
+        const hasQueriedLogs = state.toolCallHistory.some(tc => tc.toolName === "cloudwatch_query_logs");
+        const hasListedFiles = state.toolCallHistory.some(tc => tc.toolName === "github_list_files");
+        const hasGotFile = state.toolCallHistory.some(tc => tc.toolName === "github_get_file");
+        const hasCreatedPR = state.toolCallHistory.some(tc =>
+          tc.toolName === "github_create_draft_pr" || tc.toolName === "github_create_single_file_pr"
+        );
+
+        // If we haven't completed the investigation flow and have iterations left, re-prompt
+        const investigationIncomplete = hasQueriedLogs && !hasCreatedPR && state.iterations < config.maxIterations - 1;
+
+        if (investigationIncomplete) {
+          console.log(`⚠️ LLM stopped without completing flow. Completed: logs=${hasQueriedLogs}, list=${hasListedFiles}, get=${hasGotFile}, pr=${hasCreatedPR}`);
+
+          // Add the LLM's response and a continuation prompt
+          state.messages.push({
+            role: "assistant",
+            content: textContent,
+          });
+
+          // Add a system message reminding the LLM to continue using tools
+          let continuationPrompt = "⚠️ INVESTIGATION NOT COMPLETE. You need to continue using tools:\n\n";
+
+          if (!hasListedFiles && !hasGotFile) {
+            continuationPrompt += "- NEXT: Call github_list_files to explore the repository structure for the buggy code\n";
+          } else if (hasListedFiles && !hasGotFile) {
+            continuationPrompt += "- NEXT: Call github_get_file to read the file containing the bug\n";
+          } else if (hasGotFile && !hasCreatedPR) {
+            continuationPrompt += "- NEXT: Call github_create_single_file_pr to create a PR with your fix\n";
+          }
+
+          continuationPrompt += "\nDO NOT describe tool calls. EXECUTE the tool directly using the function calling mechanism.";
+
+          state.messages.push({
+            role: "user",
+            content: continuationPrompt,
+          });
+
+          await emit({ type: "llm_response", content: textContent });
+
+          // Continue to next iteration instead of returning
+          continue;
+        }
+
+        // Investigation is complete or we can't continue
         state.messages.push({
           role: "assistant",
-          content: finalContent,
+          content: textContent,
         });
 
-        await emit({ type: "llm_response", content: finalContent });
+        await emit({ type: "llm_response", content: textContent });
 
         state.status = "completed";
-        state.result = finalContent;
+        state.result = textContent;
 
-        await emit({ type: "completed", result: finalContent });
+        await emit({ type: "completed", result: textContent });
         timeoutController.stop();
         return state;
       }

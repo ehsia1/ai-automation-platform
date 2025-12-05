@@ -27,8 +27,8 @@ function parseRelativeTime(timeStr: string, now: Date): Date {
     return now;
   }
 
-  // Check for relative time patterns like "1h", "30m", "2d"
-  const relativeMatch = lower.match(/^(\d+)\s*(h|hour|hours|m|min|minutes|d|day|days)$/);
+  // Check for relative time patterns like "1h", "30m", "2d", "1h ago", "30 minutes ago"
+  const relativeMatch = lower.match(/^(\d+)\s*(h|hour|hours|m|min|minutes|d|day|days)(\s+ago)?$/);
   if (relativeMatch) {
     const value = parseInt(relativeMatch[1], 10);
     const unit = relativeMatch[2];
@@ -72,7 +72,7 @@ const definition: ToolDefinition = {
         start_time: {
           type: "string",
           description:
-            'Start time for the query. Can be ISO 8601 format or relative like "1h" (1 hour ago), "30m" (30 minutes ago), "1d" (1 day ago). Defaults to "1h".',
+            'Start time for the query. Can be ISO 8601 format or relative like "1h", "1h ago", "30m", "30 minutes ago", "1d". Defaults to "1h" (1 hour ago).',
         },
         end_time: {
           type: "string",
@@ -89,7 +89,7 @@ async function execute(
   args: Record<string, unknown>,
   _context: ToolContext
 ): Promise<ToolResult> {
-  const { log_group, query, start_time, end_time } = args as CloudWatchQueryArgs;
+  const { log_group, query, start_time, end_time } = args as unknown as CloudWatchQueryArgs;
 
   if (!log_group || !query) {
     return {

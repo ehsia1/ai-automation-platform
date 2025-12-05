@@ -11,6 +11,7 @@ import {
   githubSearchCodeTool,
   githubGetFileTool,
   githubCreateDraftPRTool,
+  githubCreateSingleFilePRTool,
   githubListFilesTool,
 } from "./github";
 
@@ -24,6 +25,7 @@ export function registerAllTools(): void {
   toolRegistry.register(githubGetFileTool); // read_only
   toolRegistry.register(githubListFilesTool); // read_only
   toolRegistry.register(githubCreateDraftPRTool); // safe_write
+  toolRegistry.register(githubCreateSingleFilePRTool); // safe_write - simpler version for single file
 }
 
 // Auto-register on import
@@ -36,4 +38,5 @@ export {
   githubGetFileTool,
   githubListFilesTool,
   githubCreateDraftPRTool,
+  githubCreateSingleFilePRTool,
 } from "./github";
