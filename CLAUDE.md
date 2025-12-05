@@ -147,10 +147,13 @@ API endpoints are documented in a Postman collection for easy testing.
 | Folder | Endpoints |
 |--------|-----------|
 | Investigation | `POST /investigate` - Start AI investigation |
-| Agent Runs | `GET /agent-runs` - List runs, `GET /agent-runs/:runId` - Get run details |
+| Agent Runs | `GET /agent-runs` - List runs, `GET /agent-runs/:runId` - Get run details, `POST /agents/:agentKey/run` - Run agent manually |
 | Approvals | `GET /approvals` - List pending, `POST /approvals/:id/approve`, `POST /approvals/:id/reject` |
+| Alerts | `GET /alerts` - List alerts, `GET /alerts/:id` - Get alert details |
+| Items | `GET /items` - List items, `GET /items/:id` - Get item details |
+| Tasks | `GET /tasks` - List tasks |
 | Webhooks | `POST /webhooks/datadog`, `POST /ingest/email` |
-| (root) | `GET /` - Health check, `GET /alerts`, `GET /items` |
+| (root) | `GET /` - Health check |
 
 ### Keeping Postman Updated
 
@@ -165,6 +168,9 @@ Folder IDs for reference:
 - Investigation: `a69166eb-e241-bdff-6c95-ce44098eb47c`
 - Agent Runs: `bf9621ad-30df-a7ed-0e56-d1234b80feac`
 - Approvals: `2f870162-8d96-6d39-c878-c06ea86030ac`
+- Alerts: `2488ddde-5821-4daf-680a-d7b8b24e9ad0`
+- Items: `b628af05-bc5a-7367-dcf7-8472d8d58f74`
+- Tasks: `8a129252-292a-2b29-b496-b2a1fe381fe2`
 - Webhooks: `68584e8e-5fdb-ed3c-3a43-75977bb03a4e`
 
 ## Notion Integration
