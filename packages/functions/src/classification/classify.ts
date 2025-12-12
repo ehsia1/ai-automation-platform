@@ -25,10 +25,13 @@ const eventbridge = new EventBridge({});
 
 // Initialize LLM based on environment
 initializeLLM({
-  provider: (process.env.LLM_PROVIDER as "ollama" | "anthropic") || "ollama",
+  provider: (process.env.LLM_PROVIDER as "ollama" | "anthropic" | "bedrock") || "bedrock",
   ollamaBaseUrl: process.env.OLLAMA_BASE_URL,
   ollamaModel: process.env.OLLAMA_MODEL,
   anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+  anthropicModel: process.env.ANTHROPIC_MODEL,
+  bedrockRegion: process.env.BEDROCK_REGION || process.env.AWS_REGION,
+  bedrockModel: process.env.BEDROCK_MODEL,
 });
 
 interface ItemCreatedEvent {

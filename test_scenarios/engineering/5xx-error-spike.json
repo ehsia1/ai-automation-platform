@@ -1,0 +1,39 @@
+{
+  "id": "5xx_error_spike",
+  "description": "5xx error rate spike on checkout-api",
+  "input": {
+    "webhook_payload": {
+      "id": "evt_567890",
+      "title": "Error Rate Spike - checkout-api",
+      "text": "5xx error rate increased from 0.1% to 8.3% in the last 10 minutes. Most errors are 503 Service Unavailable. Affected endpoints: /api/checkout/submit, /api/checkout/validate. Request volume: 2,400 RPM.",
+      "date": 1701800400,
+      "host": "checkout-api-prod-1",
+      "service": "checkout-api",
+      "priority": "P1",
+      "alert_type": "error",
+      "alert_id": "alert_5xx_checkout_001",
+      "event_type": "alert",
+      "tags": ["service:checkout-api", "env:production", "team:commerce"],
+      "url": "https://app.datadoghq.com/monitors/12348"
+    }
+  },
+  "expected": {
+    "classification": {
+      "item_type": "alert",
+      "mode": "engineering",
+      "priority": ["critical", "high"],
+      "requires_action": true,
+      "service": "checkout-api"
+    },
+    "triage": {
+      "summary_keywords": ["error", "5xx", "503", "checkout", "spike", "rate"],
+      "root_cause_keywords": ["downstream", "dependency", "timeout", "capacity", "service", "failure", "unavailable", "overload", "request"],
+      "action_keywords": ["investigate", "rollback", "scale", "check", "monitor", "restart", "review", "failover"]
+    },
+    "notification": {
+      "should_send": true,
+      "severity": ["critical", "high"]
+    }
+  },
+  "timeout_ms": 30000
+}

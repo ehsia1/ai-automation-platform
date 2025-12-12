@@ -1,0 +1,39 @@
+{
+  "id": "security_failed_logins",
+  "description": "Unusual spike in failed login attempts",
+  "input": {
+    "webhook_payload": {
+      "id": "evt_222324",
+      "title": "Security Alert - Failed Login Spike",
+      "text": "Unusual spike in failed login attempts detected. 847 failed attempts in last 15 minutes (baseline: ~20). Top source IPs: 198.51.100.0/24 (423 attempts). Targeted accounts: admin@*, support@*. Pattern suggests credential stuffing attack.",
+      "date": 1701829200,
+      "host": "auth-service-prod",
+      "service": "auth-service",
+      "priority": "P1",
+      "alert_type": "critical",
+      "alert_id": "alert_sec_login_001",
+      "event_type": "security",
+      "tags": ["service:auth-service", "env:production", "team:security", "type:security"],
+      "url": "https://app.datadoghq.com/monitors/12356"
+    }
+  },
+  "expected": {
+    "classification": {
+      "item_type": "alert",
+      "mode": "engineering",
+      "priority": ["critical", "high"],
+      "requires_action": true,
+      "service": "auth-service"
+    },
+    "triage": {
+      "summary_keywords": ["security", "failed", "login", "spike", "credential", "attack", "attempt", "brute", "force", "unusual", "suspicious", "IP", "block", "stuffing", "monitoring", "compromise", "account", "malicious"],
+      "root_cause_keywords": ["attack", "brute", "force", "credential", "stuffing", "bot", "malicious", "automated", "suspicious", "unauthorized"],
+      "action_keywords": ["block", "investigate", "rate", "limit", "WAF", "IP", "ban", "alert", "review", "escalate", "monitor", "notify"]
+    },
+    "notification": {
+      "should_send": true,
+      "severity": ["critical", "high"]
+    }
+  },
+  "timeout_ms": 30000
+}

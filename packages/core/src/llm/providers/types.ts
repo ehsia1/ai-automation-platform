@@ -81,11 +81,14 @@ export interface LLMProvider {
 }
 
 export interface LLMConfig {
-  provider: "ollama" | "anthropic";
+  provider: "ollama" | "anthropic" | "bedrock";
   // Ollama config
   ollamaBaseUrl?: string;
   ollamaModel?: string;
   // Anthropic config
   anthropicApiKey?: string;
   anthropicModel?: string;
+  // Bedrock config
+  bedrockRegion?: string;
+  bedrockModel?: string;
 }

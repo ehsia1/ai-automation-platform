@@ -56,12 +56,15 @@ export default $config({
     const bus = new sst.aws.Bus("Bus");
 
     // Environment variables for functions
+    // Always use bedrock for Lambda (Ollama only works locally)
     const llmEnv = {
-      LLM_PROVIDER: process.env.LLM_PROVIDER || "ollama",
+      LLM_PROVIDER: "bedrock",
       OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL || "http://localhost:11434",
       OLLAMA_MODEL: process.env.OLLAMA_MODEL || "llama3.1:8b",
       ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || "",
       ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514",
+      BEDROCK_REGION: process.env.BEDROCK_REGION || "us-east-1",
+      BEDROCK_MODEL: process.env.BEDROCK_MODEL || "amazon.nova-pro-v1:0",
     };
 
     // Notification environment variables
@@ -81,6 +84,12 @@ export default $config({
       link: [itemsTable, alertsTable, bus],
       environment: llmEnv,
       timeout: "60 seconds",
+      permissions: [
+        {
+          actions: ["bedrock:InvokeModel"],
+          resources: ["*"],
+        },
+      ],
     }, {
       pattern: {
         detailType: ["item.created"],
@@ -93,6 +102,12 @@ export default $config({
       link: [alertsTable, agentRunsTable, itemsTable],
       environment: { ...llmEnv, ...notificationEnv },
       timeout: "120 seconds",
+      permissions: [
+        {
+          actions: ["bedrock:InvokeModel"],
+          resources: ["*"],
+        },
+      ],
     }, {
       pattern: {
         detailType: ["alert.created"],
@@ -122,6 +137,10 @@ export default $config({
       timeout: "120 seconds",
       permissions: [
         {
+          actions: ["bedrock:InvokeModel"],
+          resources: ["*"],
+        },
+        {
           actions: [
             "logs:StartQuery",
             "logs:GetQueryResults",
@@ -147,6 +166,10 @@ export default $config({
       },
       timeout: "120 seconds",
       permissions: [
+        {
+          actions: ["bedrock:InvokeModel"],
+          resources: ["*"],
+        },
         {
           actions: [
             "logs:StartQuery",

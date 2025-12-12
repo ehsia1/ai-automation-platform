@@ -1,0 +1,39 @@
+{
+  "id": "deployment_failure",
+  "description": "Kubernetes deployment rollout failed",
+  "input": {
+    "webhook_payload": {
+      "id": "evt_101112",
+      "title": "Deployment Failed - user-service v2.3.1",
+      "text": "Kubernetes deployment rollout failed for user-service. New pods failing health checks. Readiness probe failing: HTTP 500 on /health. 0/3 replicas ready. Deployment paused. Previous version v2.3.0 still serving traffic.",
+      "date": 1701814800,
+      "host": "k8s-cluster-prod",
+      "service": "user-service",
+      "priority": "P1",
+      "alert_type": "critical",
+      "alert_id": "alert_deploy_user_001",
+      "event_type": "alert",
+      "tags": ["service:user-service", "env:production", "team:platform", "k8s:deployment"],
+      "url": "https://app.datadoghq.com/monitors/12352"
+    }
+  },
+  "expected": {
+    "classification": {
+      "item_type": "alert",
+      "mode": "engineering",
+      "priority": ["critical", "high"],
+      "requires_action": true,
+      "service": "user-service"
+    },
+    "triage": {
+      "summary_keywords": ["deployment", "failed", "health", "pod", "rollout", "version"],
+      "root_cause_keywords": ["configuration", "health", "startup", "dependency", "code", "error", "fail", "probe", "ready", "issue", "problem", "bug", "500"],
+      "action_keywords": ["rollback", "investigate", "logs", "fix", "retry", "check", "review", "revert"]
+    },
+    "notification": {
+      "should_send": true,
+      "severity": ["critical", "high"]
+    }
+  },
+  "timeout_ms": 30000
+}

@@ -1,0 +1,39 @@
+{
+  "id": "canary_test_failure",
+  "description": "Synthetic canary test failing",
+  "input": {
+    "webhook_payload": {
+      "id": "evt_252627",
+      "title": "Canary Test Failed - checkout-flow",
+      "text": "Synthetic canary test 'checkout-flow' failing consistently. Last 5 runs: FAIL. Step failing: 'Submit Payment' - timeout after 30s. Error: Element not found: #submit-button. Test URL: https://staging.example.com/checkout. Last success: 2 hours ago.",
+      "date": 1701832800,
+      "host": "canary-runner-1",
+      "service": "checkout-api",
+      "priority": "P2",
+      "alert_type": "error",
+      "alert_id": "alert_canary_checkout_001",
+      "event_type": "alert",
+      "tags": ["service:checkout-api", "env:staging", "team:qa", "type:canary"],
+      "url": "https://app.datadoghq.com/monitors/12357"
+    }
+  },
+  "expected": {
+    "classification": {
+      "item_type": "alert",
+      "mode": "engineering",
+      "priority": ["high", "medium"],
+      "requires_action": true,
+      "service": "checkout-api"
+    },
+    "triage": {
+      "summary_keywords": ["canary", "test", "failing", "checkout", "synthetic", "fail", "error"],
+      "root_cause_keywords": ["UI", "element", "deployment", "change", "regression", "code", "frontend", "timeout", "bug", "breaking", "missing", "test", "fail", "issue", "problem", "button", "submit", "selector", "css", "dom"],
+      "action_keywords": ["investigate", "rollback", "fix", "review", "deployment", "check", "revert", "debug", "test", "analyze"]
+    },
+    "notification": {
+      "should_send": true,
+      "severity": ["high", "medium"]
+    }
+  },
+  "timeout_ms": 30000
+}

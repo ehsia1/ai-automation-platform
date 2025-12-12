@@ -1,0 +1,39 @@
+{
+  "id": "ssl_cert_expiring",
+  "description": "SSL certificate expiring soon",
+  "input": {
+    "webhook_payload": {
+      "id": "evt_778899",
+      "title": "SSL Certificate Expiring - api.example.com",
+      "text": "SSL certificate for api.example.com will expire in 7 days. Certificate CN: *.example.com. Issuer: Let's Encrypt. Expiry: 2024-01-15. Auto-renewal may have failed.",
+      "date": 1701811200,
+      "host": "edge-proxy-1",
+      "service": "edge-proxy",
+      "priority": "P2",
+      "alert_type": "warning",
+      "alert_id": "alert_ssl_api_001",
+      "event_type": "alert",
+      "tags": ["service:edge-proxy", "env:production", "team:infra", "cert:api.example.com"],
+      "url": "https://app.datadoghq.com/monitors/12351"
+    }
+  },
+  "expected": {
+    "classification": {
+      "item_type": "alert",
+      "mode": "engineering",
+      "priority": ["high", "medium"],
+      "requires_action": true,
+      "service": "edge-proxy"
+    },
+    "triage": {
+      "summary_keywords": ["SSL", "certificate", "expir", "7 days", "TLS", "cert"],
+      "root_cause_keywords": ["renewal", "certbot", "encrypt", "automation", "fail", "auto", "process", "expired", "rotation", "configuration"],
+      "action_keywords": ["renew", "certbot", "investigate", "automate", "check", "update", "rotate", "fix", "configure", "manual", "review"]
+    },
+    "notification": {
+      "should_send": true,
+      "severity": ["high", "medium"]
+    }
+  },
+  "timeout_ms": 30000
+}

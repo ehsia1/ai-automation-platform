@@ -1,0 +1,39 @@
+{
+  "id": "high_cpu_billing",
+  "description": "High CPU spike on billing-api service from Datadog",
+  "input": {
+    "webhook_payload": {
+      "id": "evt_123456",
+      "title": "High CPU Alert - billing-api",
+      "text": "CPU usage exceeded 90% on billing-api service. Current: 94.2%. Threshold: 90%. This spike started approximately 5 minutes ago and correlates with increased request volume.",
+      "date": 1701789600,
+      "host": "billing-api-prod-1",
+      "service": "billing-api",
+      "priority": "P2",
+      "alert_type": "error",
+      "alert_id": "alert_cpu_billing_001",
+      "event_type": "alert",
+      "tags": ["service:billing-api", "env:production", "team:payments"],
+      "url": "https://app.datadoghq.com/monitors/12345"
+    }
+  },
+  "expected": {
+    "classification": {
+      "item_type": "alert",
+      "mode": "engineering",
+      "priority": ["critical", "high"],
+      "requires_action": true,
+      "service": "billing-api"
+    },
+    "triage": {
+      "summary_keywords": ["CPU", "billing", "spike", "90%", "high", "usage"],
+      "root_cause_keywords": ["load", "traffic", "request", "resource", "spike", "volume", "increase", "thread", "process"],
+      "action_keywords": ["scale", "investigate", "monitor", "review", "restart", "check", "increase", "analyze"]
+    },
+    "notification": {
+      "should_send": true,
+      "severity": ["critical", "high"]
+    }
+  },
+  "timeout_ms": 30000
+}

@@ -1,0 +1,39 @@
+{
+  "id": "rate_limiting",
+  "description": "API rate limiting triggered by external partner",
+  "input": {
+    "webhook_payload": {
+      "id": "evt_131415",
+      "title": "Rate Limit Exceeded - partner-api",
+      "text": "Rate limiting triggered for API key: partner_acme_prod. 429 responses: 1,247 in last 5 minutes. Rate limit: 1000 req/min. Client IP: 203.0.113.50. Affected endpoints: /api/v2/inventory, /api/v2/orders.",
+      "date": 1701818400,
+      "host": "api-gateway-prod",
+      "service": "partner-api",
+      "priority": "P2",
+      "alert_type": "warning",
+      "alert_id": "alert_ratelimit_partner_001",
+      "event_type": "alert",
+      "tags": ["service:partner-api", "env:production", "team:partnerships", "partner:acme"],
+      "url": "https://app.datadoghq.com/monitors/12353"
+    }
+  },
+  "expected": {
+    "classification": {
+      "item_type": "alert",
+      "mode": "engineering",
+      "priority": ["high", "medium"],
+      "requires_action": true,
+      "service": "partner-api"
+    },
+    "triage": {
+      "summary_keywords": ["rate limit", "429", "partner", "exceeded", "throttl", "API"],
+      "root_cause_keywords": ["traffic", "integration", "bug", "retry", "loop", "spike", "client", "request", "volume", "misconfigur", "burst"],
+      "action_keywords": ["contact", "investigate", "increase", "review", "whitelist", "check", "adjust", "limit", "notify", "block", "configure"]
+    },
+    "notification": {
+      "should_send": true,
+      "severity": ["high", "medium"]
+    }
+  },
+  "timeout_ms": 30000
+}

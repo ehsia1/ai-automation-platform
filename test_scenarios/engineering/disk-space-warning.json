@@ -1,0 +1,39 @@
+{
+  "id": "disk_space_warning",
+  "description": "Disk space running low on logging infrastructure",
+  "input": {
+    "webhook_payload": {
+      "id": "evt_445566",
+      "title": "Disk Space Warning - log-aggregator",
+      "text": "Disk usage at 85% on /var/log volume. Current: 425GB/500GB. Growth rate: 2GB/hour. Estimated time to full: ~37 hours. Log rotation running but insufficient.",
+      "date": 1701807600,
+      "host": "log-aggregator-prod-1",
+      "service": "log-aggregator",
+      "priority": "P3",
+      "alert_type": "warning",
+      "alert_id": "alert_disk_logs_001",
+      "event_type": "alert",
+      "tags": ["service:log-aggregator", "env:production", "team:infra"],
+      "url": "https://app.datadoghq.com/monitors/12350"
+    }
+  },
+  "expected": {
+    "classification": {
+      "item_type": "alert",
+      "mode": "engineering",
+      "priority": ["medium", "high"],
+      "requires_action": true,
+      "service": "log-aggregator"
+    },
+    "triage": {
+      "summary_keywords": ["disk", "space", "85%", "log", "storage", "volume", "full"],
+      "root_cause_keywords": ["rotation", "retention", "growth", "cleanup", "log", "accumulation", "insufficient", "rate", "volume", "capacity"],
+      "action_keywords": ["cleanup", "rotate", "expand", "retention", "archive", "delete", "clear", "increase", "check", "review", "configure", "monitor", "reduce", "remove", "address", "storage", "free", "space", "investigate", "identify"]
+    },
+    "notification": {
+      "should_send": true,
+      "severity": ["medium"]
+    }
+  },
+  "timeout_ms": 30000
+}

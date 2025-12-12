@@ -9,6 +9,7 @@ import type {
 } from "./providers/types";
 import { OllamaProvider } from "./providers/ollama";
 import { AnthropicProvider } from "./providers/anthropic";
+import { BedrockProvider } from "./providers/bedrock";
 import { withRetry, type RetryOptions } from "./retry";
 
 let provider: LLMProvider | null = null;
@@ -27,6 +28,11 @@ export function initializeLLM(config: LLMConfig): void {
       apiKey: config.anthropicApiKey,
       model: config.anthropicModel,
     });
+  } else if (config.provider === "bedrock") {
+    provider = new BedrockProvider({
+      region: config.bedrockRegion,
+      model: config.bedrockModel,
+    });
   } else {
     throw new Error(`Unknown LLM provider: ${config.provider}`);
   }
@@ -44,6 +50,11 @@ export function getProvider(): LLMProvider {
       provider = new AnthropicProvider({
         apiKey,
         model: process.env.ANTHROPIC_MODEL,
+      });
+    } else if (llmProvider === "bedrock") {
+      provider = new BedrockProvider({
+        region: process.env.BEDROCK_REGION || process.env.AWS_REGION,
+        model: process.env.BEDROCK_MODEL,
       });
     } else {
       // Default to Ollama for local development

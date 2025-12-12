@@ -1,0 +1,39 @@
+{
+  "id": "low_priority_info",
+  "description": "Low priority informational alert - should NOT require action",
+  "input": {
+    "webhook_payload": {
+      "id": "evt_161718",
+      "title": "Scheduled Maintenance Completed - cache-cluster",
+      "text": "Scheduled maintenance window completed successfully. Redis cluster cache-cluster-prod upgraded from 6.2.6 to 7.0.11. All nodes healthy. No data loss. Maintenance duration: 45 minutes.",
+      "date": 1701822000,
+      "host": "cache-cluster-prod",
+      "service": "redis-cache",
+      "priority": "P4",
+      "alert_type": "info",
+      "alert_id": "alert_maint_cache_001",
+      "event_type": "info",
+      "tags": ["service:redis-cache", "env:production", "team:infra", "type:maintenance"],
+      "url": "https://app.datadoghq.com/monitors/12354"
+    }
+  },
+  "expected": {
+    "classification": {
+      "item_type": "alert",
+      "mode": "engineering",
+      "priority": ["low", "medium"],
+      "requires_action": false,
+      "service": "redis-cache"
+    },
+    "triage": {
+      "summary_keywords": ["maintenance", "completed", "successful", "Redis", "upgrade", "healthy", "no"],
+      "root_cause_keywords": [],
+      "action_keywords": []
+    },
+    "notification": {
+      "should_send": false,
+      "severity": ["low"]
+    }
+  },
+  "timeout_ms": 30000
+}

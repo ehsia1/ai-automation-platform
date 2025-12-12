@@ -1,0 +1,39 @@
+{
+  "id": "kafka_consumer_lag",
+  "description": "Kafka consumer lag growing on event processor",
+  "input": {
+    "webhook_payload": {
+      "id": "evt_192021",
+      "title": "Consumer Lag Alert - event-processor",
+      "text": "Kafka consumer lag growing rapidly. Topic: order-events. Consumer group: event-processor-prod. Current lag: 45,000 messages. Lag growth: 500 msg/sec. Consumer throughput: 200 msg/sec. Estimated catch-up time: Never (falling behind).",
+      "date": 1701825600,
+      "host": "event-processor-prod-1",
+      "service": "event-processor",
+      "priority": "P1",
+      "alert_type": "critical",
+      "alert_id": "alert_kafka_events_001",
+      "event_type": "alert",
+      "tags": ["service:event-processor", "env:production", "team:data", "kafka:order-events"],
+      "url": "https://app.datadoghq.com/monitors/12355"
+    }
+  },
+  "expected": {
+    "classification": {
+      "item_type": "alert",
+      "mode": "engineering",
+      "priority": ["critical", "high"],
+      "requires_action": true,
+      "service": "event-processor"
+    },
+    "triage": {
+      "summary_keywords": ["Kafka", "lag", "consumer", "growing", "behind", "backlog", "message"],
+      "root_cause_keywords": ["throughput", "processing", "bottleneck", "slow", "capacity", "volume", "consumer", "overload", "insufficient", "rate"],
+      "action_keywords": ["scale", "investigate", "partition", "consumers", "increase", "add", "check", "review", "monitor", "restart", "optimize"]
+    },
+    "notification": {
+      "should_send": true,
+      "severity": ["critical", "high"]
+    }
+  },
+  "timeout_ms": 30000
+}

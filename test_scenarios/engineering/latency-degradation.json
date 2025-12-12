@@ -1,0 +1,39 @@
+{
+  "id": "latency_degradation",
+  "description": "API latency degradation on search-service",
+  "input": {
+    "webhook_payload": {
+      "id": "evt_112233",
+      "title": "Latency Alert - search-service",
+      "text": "P99 latency increased from 150ms to 890ms over the last 15 minutes. P50 latency: 320ms (baseline: 45ms). Affected endpoint: /api/search. No errors detected but user experience significantly degraded.",
+      "date": 1701804000,
+      "host": "search-service-prod-2",
+      "service": "search-service",
+      "priority": "P2",
+      "alert_type": "warning",
+      "alert_id": "alert_latency_search_001",
+      "event_type": "alert",
+      "tags": ["service:search-service", "env:production", "team:discovery"],
+      "url": "https://app.datadoghq.com/monitors/12349"
+    }
+  },
+  "expected": {
+    "classification": {
+      "item_type": "alert",
+      "mode": "engineering",
+      "priority": ["high", "medium"],
+      "requires_action": true,
+      "service": "search-service"
+    },
+    "triage": {
+      "summary_keywords": ["latency", "P99", "search", "degraded", "slow", "response", "time", "increased", "performance", "experience"],
+      "root_cause_keywords": ["query", "index", "cache", "load", "database", "slow", "traffic", "resource", "bottleneck", "performance", "timeout", "degradation", "spike", "increased", "volume", "request", "latency", "response", "time", "backend", "processing"],
+      "action_keywords": ["investigate", "cache", "scale", "optimize", "index", "check", "review", "monitor", "analyze", "profile", "increase"]
+    },
+    "notification": {
+      "should_send": true,
+      "severity": ["high", "medium"]
+    }
+  },
+  "timeout_ms": 30000
+}

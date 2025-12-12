@@ -18,31 +18,54 @@ export const list: APIGatewayProxyHandler = async (event) => {
     const triggerId = event.queryStringParameters?.trigger_id;
     const limit = parseInt(event.queryStringParameters?.limit || "50", 10);
 
-    const filters: string[] = [];
-    const expressionValues: Record<string, unknown> = {
-      ":wsId": DEFAULT_WORKSPACE_ID,
-    };
+    let result;
 
-    if (agentKey) {
-      filters.push("agent_key = :agentKey");
-      expressionValues[":agentKey"] = agentKey;
-    }
-
+    // Use GSI for efficient trigger_id lookup
     if (triggerId) {
-      filters.push("trigger_id = :triggerId");
-      expressionValues[":triggerId"] = triggerId;
-    }
+      const expressionValues: Record<string, unknown> = {
+        ":triggerId": triggerId,
+      };
+      const filters: string[] = [];
 
-    const result = await dynamodb.send(
-      new QueryCommand({
-        TableName: Resource.AgentRuns.name,
-        KeyConditionExpression: "workspace_id = :wsId",
-        FilterExpression: filters.length > 0 ? filters.join(" AND ") : undefined,
-        ExpressionAttributeValues: expressionValues,
-        Limit: limit,
-        ScanIndexForward: false,
-      })
-    );
+      if (agentKey) {
+        filters.push("agent_key = :agentKey");
+        expressionValues[":agentKey"] = agentKey;
+      }
+
+      result = await dynamodb.send(
+        new QueryCommand({
+          TableName: Resource.AgentRuns.name,
+          IndexName: "byTrigger",
+          KeyConditionExpression: "trigger_id = :triggerId",
+          FilterExpression: filters.length > 0 ? filters.join(" AND ") : undefined,
+          ExpressionAttributeValues: expressionValues,
+          Limit: limit,
+          ScanIndexForward: false,
+        })
+      );
+    } else {
+      // Default query by workspace_id
+      const expressionValues: Record<string, unknown> = {
+        ":wsId": DEFAULT_WORKSPACE_ID,
+      };
+      const filters: string[] = [];
+
+      if (agentKey) {
+        filters.push("agent_key = :agentKey");
+        expressionValues[":agentKey"] = agentKey;
+      }
+
+      result = await dynamodb.send(
+        new QueryCommand({
+          TableName: Resource.AgentRuns.name,
+          KeyConditionExpression: "workspace_id = :wsId",
+          FilterExpression: filters.length > 0 ? filters.join(" AND ") : undefined,
+          ExpressionAttributeValues: expressionValues,
+          Limit: limit,
+          ScanIndexForward: false,
+        })
+      );
+    }
 
     return {
       statusCode: 200,

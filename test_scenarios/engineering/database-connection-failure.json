@@ -1,0 +1,39 @@
+{
+  "id": "database_connection_failure",
+  "description": "Database connection pool exhausted on order-service",
+  "input": {
+    "webhook_payload": {
+      "id": "evt_345678",
+      "title": "Database Connection Failure - order-service",
+      "text": "Connection pool exhausted. Unable to acquire connection after 30s timeout. Active connections: 100/100. Waiting requests: 47. Multiple downstream services affected.",
+      "date": 1701796800,
+      "host": "order-service-prod-3",
+      "service": "order-service",
+      "priority": "P1",
+      "alert_type": "critical",
+      "alert_id": "alert_db_order_001",
+      "event_type": "alert",
+      "tags": ["service:order-service", "env:production", "team:commerce", "database:postgres"],
+      "url": "https://app.datadoghq.com/monitors/12347"
+    }
+  },
+  "expected": {
+    "classification": {
+      "item_type": "alert",
+      "mode": "engineering",
+      "priority": ["critical"],
+      "requires_action": true,
+      "service": "order-service"
+    },
+    "triage": {
+      "summary_keywords": ["database", "connection", "pool", "exhausted", "timeout"],
+      "root_cause_keywords": ["connection", "pool", "leak", "query", "slow", "exhausted", "timeout", "limit", "max"],
+      "action_keywords": ["increase", "restart", "investigate", "query", "scale", "check", "review", "fix", "optimize"]
+    },
+    "notification": {
+      "should_send": true,
+      "severity": ["critical"]
+    }
+  },
+  "timeout_ms": 30000
+}

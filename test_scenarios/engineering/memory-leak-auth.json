@@ -1,0 +1,39 @@
+{
+  "id": "memory_leak_auth",
+  "description": "Memory leak detected in auth-service",
+  "input": {
+    "webhook_payload": {
+      "id": "evt_789012",
+      "title": "Memory Usage Critical - auth-service",
+      "text": "Memory usage has been steadily increasing over the past 2 hours. Current: 87% (2.8GB/3.2GB). Rate of increase: ~50MB/hour. No recent deployments detected.",
+      "date": 1701793200,
+      "host": "auth-service-prod-2",
+      "service": "auth-service",
+      "priority": "P1",
+      "alert_type": "critical",
+      "alert_id": "alert_mem_auth_001",
+      "event_type": "alert",
+      "tags": ["service:auth-service", "env:production", "team:platform"],
+      "url": "https://app.datadoghq.com/monitors/12346"
+    }
+  },
+  "expected": {
+    "classification": {
+      "item_type": "alert",
+      "mode": "engineering",
+      "priority": ["critical"],
+      "requires_action": true,
+      "service": "auth-service"
+    },
+    "triage": {
+      "summary_keywords": ["memory", "leak", "auth", "increasing", "usage", "critical"],
+      "root_cause_keywords": ["leak", "allocation", "garbage", "heap", "memory", "resource", "exhaustion", "growth", "steady", "increase", "GC", "OOM"],
+      "action_keywords": ["restart", "investigate", "heap", "dump", "scale", "rollback", "check", "review", "analyze", "monitor", "profile", "identify", "resolve", "address", "mitigate", "fix", "service", "instances", "memory", "examine", "capture"]
+    },
+    "notification": {
+      "should_send": true,
+      "severity": ["critical"]
+    }
+  },
+  "timeout_ms": 30000
+}
