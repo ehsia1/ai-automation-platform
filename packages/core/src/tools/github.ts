@@ -875,3 +875,266 @@ export const githubCreateSingleFilePRTool: Tool = {
   definition: createSingleFilePRDefinition,
   execute: executeCreateSingleFilePR,
 };
+
+// ============================================================================
+// GitHub Edit File Tool (Search & Replace)
+// ============================================================================
+
+const EDIT_FILE_TOOL_NAME = "github_edit_file";
+
+interface EditOperation {
+  old_string: string;
+  new_string: string;
+}
+
+interface EditFileArgs {
+  repo: string;
+  file_path: string;
+  edits: EditOperation[];
+  title: string;
+  description: string;
+  branch_name: string;
+  base_branch?: string;
+}
+
+const editFileDefinition: ToolDefinition = {
+  type: "function",
+  function: {
+    name: EDIT_FILE_TOOL_NAME,
+    description:
+      "Edit a file in a GitHub repository using search-and-replace. PREFERRED over github_create_draft_pr because you don't need to provide full file content - just specify what to find and what to replace it with. The original file is automatically fetched and the edits are applied. Creates a draft PR with the changes.",
+    parameters: {
+      type: "object",
+      properties: {
+        repo: {
+          type: "string",
+          description: "Repository (format: owner/repo)",
+        },
+        file_path: {
+          type: "string",
+          description: "Path to the file to edit (e.g., src/calculator.py)",
+        },
+        edits: {
+          type: "array",
+          description: "Array of search-and-replace operations. Each edit finds 'old_string' and replaces it with 'new_string'. IMPORTANT: old_string must match EXACTLY (including whitespace and indentation).",
+          items: {
+            type: "object",
+            properties: {
+              old_string: {
+                type: "string",
+                description: "The exact string to find in the file. Must match precisely including all whitespace, indentation, and newlines.",
+              },
+              new_string: {
+                type: "string",
+                description: "The string to replace old_string with.",
+              },
+            },
+            required: ["old_string", "new_string"],
+          },
+        },
+        title: {
+          type: "string",
+          description: "Pull request title",
+        },
+        description: {
+          type: "string",
+          description: "Pull request description explaining the changes",
+        },
+        branch_name: {
+          type: "string",
+          description: "Name for the new branch (e.g., fix/divide-by-zero)",
+        },
+        base_branch: {
+          type: "string",
+          description: "Base branch to merge into (defaults to 'main')",
+        },
+      },
+      required: ["repo", "file_path", "edits", "title", "description", "branch_name"],
+    },
+  },
+};
+
+async function executeEditFile(
+  args: Record<string, unknown>,
+  context: ToolContext
+): Promise<ToolResult> {
+  const {
+    repo,
+    file_path,
+    title,
+    description,
+    branch_name,
+    base_branch = "main",
+  } = args as Omit<EditFileArgs, "edits">;
+  let { edits } = args as { edits: unknown };
+
+  // Validate required params
+  if (!repo || !file_path || !edits || !title || !description || !branch_name) {
+    const missing = [];
+    if (!repo) missing.push("repo");
+    if (!file_path) missing.push("file_path");
+    if (!edits) missing.push("edits");
+    if (!title) missing.push("title");
+    if (!description) missing.push("description");
+    if (!branch_name) missing.push("branch_name");
+    return {
+      success: false,
+      output: "",
+      error: `Missing required parameters: ${missing.join(", ")}`,
+    };
+  }
+
+  const [owner, repoName] = repo.split("/");
+  if (!owner || !repoName) {
+    return {
+      success: false,
+      output: "",
+      error: "Invalid repo format. Use owner/repo (e.g., facebook/react)",
+    };
+  }
+
+  // Handle edits passed as JSON string
+  if (typeof edits === "string") {
+    try {
+      edits = JSON.parse(edits);
+    } catch {
+      return {
+        success: false,
+        output: "",
+        error: "edits must be a valid JSON array",
+      };
+    }
+  }
+
+  if (!Array.isArray(edits) || edits.length === 0) {
+    return {
+      success: false,
+      output: "",
+      error: "edits must be a non-empty array of {old_string, new_string} objects",
+    };
+  }
+
+  try {
+    const client = getOctokit();
+
+    // 1. Fetch the original file content
+    const fileResponse = await client.repos.getContent({
+      owner,
+      repo: repoName,
+      path: file_path,
+      ref: base_branch,
+    });
+
+    if (Array.isArray(fileResponse.data) || fileResponse.data.type !== "file") {
+      return {
+        success: false,
+        output: "",
+        error: `Path "${file_path}" is not a file`,
+      };
+    }
+
+    let content = Buffer.from(fileResponse.data.content, "base64").toString("utf8");
+    const originalContent = content;
+
+    // 2. Apply each edit operation
+    const editResults: string[] = [];
+    for (let i = 0; i < (edits as EditOperation[]).length; i++) {
+      const edit = (edits as EditOperation[])[i];
+
+      if (!edit.old_string || edit.new_string === undefined) {
+        return {
+          success: false,
+          output: "",
+          error: `Edit ${i + 1} is missing old_string or new_string`,
+        };
+      }
+
+      // Normalize escape sequences in old_string and new_string
+      let oldStr = edit.old_string;
+      let newStr = edit.new_string;
+
+      // Handle literal \n and \t (LLMs sometimes output these instead of actual newlines/tabs)
+      if (oldStr.includes('\\n') && !content.includes(oldStr)) {
+        oldStr = oldStr.replace(/\\n/g, '\n');
+      }
+      if (oldStr.includes('\\t') && !content.includes(oldStr)) {
+        oldStr = oldStr.replace(/\\t/g, '\t');
+      }
+      if (newStr.includes('\\n')) {
+        newStr = newStr.replace(/\\n/g, '\n');
+      }
+      if (newStr.includes('\\t')) {
+        newStr = newStr.replace(/\\t/g, '\t');
+      }
+
+      // Check if old_string exists in content
+      if (!content.includes(oldStr)) {
+        // Try to find a close match to give helpful error
+        const preview = oldStr.substring(0, 50).replace(/\n/g, '\\n');
+        return {
+          success: false,
+          output: "",
+          error: `Edit ${i + 1} failed: Could not find "${preview}${oldStr.length > 50 ? '...' : ''}" in the file. Make sure old_string matches exactly, including whitespace and indentation. TIP: Use github_get_file first to see the exact content.`,
+        };
+      }
+
+      // Check for multiple occurrences
+      const occurrences = content.split(oldStr).length - 1;
+      if (occurrences > 1) {
+        const preview = oldStr.substring(0, 50).replace(/\n/g, '\\n');
+        return {
+          success: false,
+          output: "",
+          error: `Edit ${i + 1} failed: Found ${occurrences} occurrences of "${preview}${oldStr.length > 50 ? '...' : ''}". old_string must be unique. Include more surrounding context to make it unique.`,
+        };
+      }
+
+      // Apply the replacement
+      content = content.replace(oldStr, newStr);
+      editResults.push(`✓ Edit ${i + 1}: Replaced ${oldStr.split('\n').length} line(s)`);
+    }
+
+    // 3. Verify something actually changed
+    if (content === originalContent) {
+      return {
+        success: false,
+        output: "",
+        error: "No changes were made. The edits resulted in identical content.",
+      };
+    }
+
+    // 4. Create the PR using the existing PR creation logic
+    const prArgs = {
+      repo,
+      title,
+      body: description,
+      base: base_branch,
+      head: branch_name,
+      files: [{ path: file_path, content }],
+    };
+
+    const prResult = await executeCreatePR(prArgs, context);
+
+    // Add edit details to the output
+    if (prResult.success) {
+      prResult.output = `Edits applied:\n${editResults.join('\n')}\n\n${prResult.output}`;
+    }
+
+    return prResult;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return {
+      success: false,
+      output: "",
+      error: `Failed to edit file: ${errorMessage}`,
+    };
+  }
+}
+
+export const githubEditFileTool: Tool = {
+  name: EDIT_FILE_TOOL_NAME,
+  description: editFileDefinition.function.description,
+  riskTier: "safe_write",
+  definition: editFileDefinition,
+  execute: executeEditFile,
+};

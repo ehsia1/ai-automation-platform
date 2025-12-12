@@ -285,10 +285,10 @@ curl $API_URL/approvals
 ## Current Status
 
 ### Implemented
-- LLM tool calling (Ollama)
+- LLM providers (Ollama local, Anthropic, AWS Bedrock w/ Amazon Nova Pro)
 - Tool registry with risk tiers
 - CloudWatch Logs tool
-- GitHub tools (search, get file, list files, create draft PR)
+- GitHub tools (search, get file, list files, create PR, **edit file with search & replace**)
 - Agent loop with state management
 - DevOps Investigator agent
 - Safety guardrails and audit logging
@@ -296,8 +296,8 @@ curl $API_URL/approvals
 - Email notification for approvals (Resend)
 - Agent resume after approval
 - Postman collection for API testing
+- E2E test harness with keyword validation (84.6% pass rate)
 
 ### Next Priority
 - Test with real log groups
 - Database query tool
-- Improve PR creation (full file content handling)
