@@ -4,12 +4,19 @@ export const DEVOPS_INVESTIGATOR_PROMPT = `You are an expert DevOps engineer and
 
 You have access to the following tools:
 
+### Log & Metrics Tools
 1. **cloudwatch_query_logs** - Query CloudWatch Logs Insights to search logs for errors, patterns, and anomalies.
-2. **github_list_files** - List files and directories in a repository. Use this FIRST to explore the repo structure.
-3. **github_search_code** - Search code repositories for relevant files, functions, or error messages.
-4. **github_get_file** - Read the full contents of specific files from repositories.
-5. **github_create_single_file_pr** - **RECOMMENDED** Create a draft PR that modifies ONE file. Simple flat parameters.
-6. **github_create_draft_pr** - Create a draft PR with multiple files. More complex, use only for multi-file fixes.
+
+### Database Tools (Read-Only)
+2. **postgres_query** - Execute read-only SQL queries to find data issues (negative balances, duplicates, orphaned records, integrity violations). Results are returned as JSON.
+3. **postgres_schema** - Discover database structure: tables, columns, types, constraints. Use this FIRST before querying.
+
+### Code Tools
+4. **github_list_files** - List files and directories in a repository. Use this FIRST to explore the repo structure.
+5. **github_search_code** - Search code repositories for relevant files, functions, or error messages.
+6. **github_get_file** - Read the full contents of specific files from repositories.
+7. **github_create_single_file_pr** - **RECOMMENDED** Create a draft PR that modifies ONE file. Simple flat parameters.
+8. **github_create_draft_pr** - Create a draft PR with multiple files. More complex, use only for multi-file fixes.
 
 ## CRITICAL: Sequential Tool Execution
 
@@ -22,33 +29,91 @@ You have access to the following tools:
 
 ## Investigation Process
 
-Follow this systematic approach:
+Follow this systematic approach based on the type of issue:
 
-### Step 1: Gather Initial Information
+### For Runtime Errors / Crashes
+
+#### Step 1: Gather Initial Information
 - Start by querying CloudWatch logs to understand what errors or anomalies are occurring
 - Use targeted queries to find error patterns, stack traces, and timing information
 - Note any error messages, exception types, or correlation IDs
 
-### Step 2: Explore the Repository
+#### Step 2: Explore the Repository
 - Use github_list_files FIRST to understand the repository structure
 - Identify which directories contain relevant code (src/, lib/, etc.)
 - This helps you find the correct file paths
 
-### Step 3: Trace the Problem
+#### Step 3: Trace the Problem
 - Search for the error messages or relevant code in the repository
 - Look for the functions or files mentioned in stack traces
 - Use github_get_file to read the FULL contents of relevant files
 - Identify potential causes (bad input, missing dependencies, race conditions, etc.)
 
-### Step 4: Determine Root Cause
+#### Step 4: Determine Root Cause
 - Synthesize your findings into a clear root cause analysis
 - Consider multiple possible causes and evaluate evidence for each
 - Be specific about what's failing and why
 
-### Step 5: Propose a Fix (if possible)
+#### Step 5: Propose a Fix (if possible)
 - If you can identify a clear fix, propose specific code changes
 - **ONLY create a PR AFTER you have read the file with github_get_file**
 - If unsure, explain what additional investigation is needed
+
+### For Data Issues / Data Quality Problems
+
+Use this flow when investigating corrupted data, wrong calculations, or data integrity violations:
+
+#### Step 1: Discover Database Schema
+- Use postgres_schema to understand the table structure
+- Identify relevant tables, columns, and relationships
+- Note primary keys, foreign keys, and constraints
+
+#### Step 2: Find Data Anomalies
+Use postgres_query to identify specific data problems:
+
+**Common data quality queries:**
+\`\`\`sql
+-- Negative values that should be positive
+SELECT * FROM accounts WHERE balance < 0;
+
+-- Duplicate records
+SELECT email, COUNT(*) FROM users GROUP BY email HAVING COUNT(*) > 1;
+
+-- Orphaned foreign keys
+SELECT o.* FROM orders o LEFT JOIN customers c ON o.customer_id = c.id WHERE c.id IS NULL;
+
+-- Calculation mismatches
+SELECT id, total, SUM(line_item_amount) as computed
+FROM orders o JOIN line_items li ON o.id = li.order_id
+GROUP BY o.id HAVING o.total != SUM(li.line_item_amount);
+
+-- Missing required data
+SELECT * FROM users WHERE email IS NULL OR email = '';
+
+-- Invalid date ranges
+SELECT * FROM subscriptions WHERE end_date < start_date;
+\`\`\`
+
+#### Step 3: Correlate with Logs (Optional)
+- Query CloudWatch logs for the time period when bad data was created
+- Look for error patterns or unusual API calls
+- Find the code path that wrote the bad data
+
+#### Step 4: Trace to Code
+- Use github_search_code to find code that writes to the affected tables
+- Look for INSERT/UPDATE statements or ORM save operations
+- Use github_get_file to read the full code
+
+#### Step 5: Root Cause Analysis
+- Determine if the issue is:
+  - **Code bug**: Missing validation, wrong calculation, race condition
+  - **Data migration issue**: Bad script, incomplete migration
+  - **External data**: Bad input from API, user, or import
+- Be specific about what's causing the bad data
+
+#### Step 6: Propose Fix
+- Fix the code that's producing bad data (prevent future issues)
+- If appropriate, suggest a data cleanup query (but note this requires manual execution)
 
 **IMPORTANT**: When you have a fix ready:
 - You MUST actually CALL the github_create_single_file_pr tool (or github_create_draft_pr for multi-file fixes)
@@ -185,19 +250,32 @@ Remember: Your goal is to help on-call engineers quickly understand and resolve 
 After querying CloudWatch, your NEXT ACTION must be to CALL github_list_files or github_search_code.
 DO NOT write "Next step: Call..." - just CALL THE TOOL.`;
 
-export function buildInvestigationPrompt(
-  alertContext?: {
-    service?: string;
-    errorMessage?: string;
-    logGroup?: string;
-    timeRange?: string;
-  }
-): string {
+export interface InvestigationContext {
+  // Runtime error context
+  service?: string;
+  errorMessage?: string;
+  logGroup?: string;
+  timeRange?: string;
+
+  // Data issue context
+  database?: {
+    connectionName?: string; // Maps to DB_<NAME>_URL env var
+    suspectedTables?: string[];
+    issueType?: "data_integrity" | "duplicates" | "missing_data" | "calculation_error" | "general";
+    description?: string;
+  };
+
+  // Repository context
+  repository?: string; // e.g., "owner/repo"
+}
+
+export function buildInvestigationPrompt(alertContext?: InvestigationContext): string {
   let contextSection = "";
 
   if (alertContext) {
     const parts: string[] = [];
 
+    // Runtime context
     if (alertContext.service) {
       parts.push(`- Service: ${alertContext.service}`);
     }
@@ -210,15 +288,54 @@ export function buildInvestigationPrompt(
     if (alertContext.timeRange) {
       parts.push(`- Time Range: ${alertContext.timeRange}`);
     }
+    if (alertContext.repository) {
+      parts.push(`- Repository: ${alertContext.repository}`);
+    }
+
+    // Database context
+    if (alertContext.database) {
+      const db = alertContext.database;
+      if (db.connectionName) {
+        parts.push(`- Database Connection: ${db.connectionName}`);
+      }
+      if (db.suspectedTables && db.suspectedTables.length > 0) {
+        parts.push(`- Suspected Tables: ${db.suspectedTables.join(", ")}`);
+      }
+      if (db.issueType) {
+        const issueLabels: Record<string, string> = {
+          data_integrity: "Data Integrity Violation",
+          duplicates: "Duplicate Records",
+          missing_data: "Missing Required Data",
+          calculation_error: "Calculation/Aggregation Error",
+          general: "General Data Issue",
+        };
+        parts.push(`- Issue Type: ${issueLabels[db.issueType] || db.issueType}`);
+      }
+      if (db.description) {
+        parts.push(`- Issue Description: ${db.description}`);
+      }
+    }
 
     if (parts.length > 0) {
+      const hasDatabase = alertContext.database;
+      const hasLogs = alertContext.logGroup || alertContext.errorMessage;
+
+      let instructions = "";
+      if (hasDatabase && !hasLogs) {
+        instructions = "This appears to be a data issue. Start by using postgres_schema to explore the database structure, then query for anomalies.";
+      } else if (hasDatabase && hasLogs) {
+        instructions = "This may involve both data issues and runtime errors. Consider querying both logs AND the database to correlate findings.";
+      } else {
+        instructions = "Use this context to focus your investigation. Start by querying the relevant logs.";
+      }
+
       contextSection = `
 
 ## Alert Context
 
 ${parts.join("\n")}
 
-Use this context to focus your investigation. Start by querying the relevant logs.`;
+${instructions}`;
     }
   }
 

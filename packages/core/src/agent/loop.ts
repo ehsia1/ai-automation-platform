@@ -82,6 +82,8 @@ function extractToolCallFromText(text: string): { name: string; parameters: Reco
     "github_list_files",
     "github_search_code",
     "cloudwatch_query_logs",
+    "postgres_query",
+    "postgres_schema",
   ];
 
   // Try to find any JSON object that looks like a tool call

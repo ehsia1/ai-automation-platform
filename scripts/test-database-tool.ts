@@ -18,7 +18,6 @@ process.env.DATABASE_URL = DATABASE_URL;
 
 const context: ToolContext = {
   workspaceId: "test",
-  triggerId: "test-run-db",
   runId: "test-run-db",
 };
 
