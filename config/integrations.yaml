@@ -36,6 +36,7 @@ integrations:
   # ============================================================
 
   # PagerDuty - Incident management
+  # Uncomment and set PAGERDUTY_TOKEN to enable
   # pagerduty:
   #   type: api
   #   openapi: https://raw.githubusercontent.com/PagerDuty/api-schema/main/reference/REST/openapiv3.json
@@ -47,6 +48,16 @@ integrations:
   #     - getIncident
   #     - listServices
   #     - listOnCalls
+
+  # HTTPBin - Test API (useful for testing integration framework)
+  httpbin:
+    type: api
+    openapi: https://raw.githubusercontent.com/APIs-guru/openapi-directory/main/APIs/httpbin.org/0.9.2/openapi.yaml
+    baseUrl: https://httpbin.org
+    operations:
+      - GET__ip
+      - GET__headers
+      - GET__user-agent
 
   # Datadog - Monitoring and observability
   # datadog:

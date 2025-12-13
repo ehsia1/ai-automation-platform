@@ -14,55 +14,9 @@ import type {
   APIIntegration,
   RESTIntegration,
 } from "./types";
-import { loadIntegrationsConfig, validateConfig } from "./config";
+import { loadIntegrationsConfig, validateConfig, getDefaultConfigPath } from "./config";
 import { OpenAPIClient, RESTClient } from "./dynamic-api";
-
-/**
- * Placeholder for MCP client - will be implemented when we add MCP support
- */
-class MCPClient implements IntegrationClient {
-  name: string;
-  type: "mcp" = "mcp";
-  private config: MCPIntegration;
-
-  constructor(name: string, config: MCPIntegration) {
-    this.name = name;
-    this.config = config;
-  }
-
-  async initialize(): Promise<void> {
-    // TODO: Implement MCP server spawning
-    // This would use @modelcontextprotocol/sdk to spawn and connect
-    console.log(`[MCP] Would initialize ${this.config.package}`);
-  }
-
-  getTools(): IntegrationTool[] {
-    // TODO: Get tools from MCP server
-    return [];
-  }
-
-  async call(
-    operation: string,
-    params?: Record<string, unknown>
-  ): Promise<IntegrationCallResult> {
-    // TODO: Route to MCP server
-    return {
-      success: false,
-      error: "MCP integration not yet implemented",
-    };
-  }
-
-  async testConnection(): Promise<{ ok: boolean; message: string }> {
-    return {
-      ok: false,
-      message: "MCP integration not yet implemented",
-    };
-  }
-
-  async close(): Promise<void> {
-    // TODO: Close MCP server connection
-  }
-}
+import { MCPClient } from "./mcp-client";
 
 export class IntegrationRouter {
   private clients: Map<string, IntegrationClient> = new Map();
@@ -89,8 +43,8 @@ export class IntegrationRouter {
   }
 
   private async doInitialize(configPath?: string): Promise<void> {
-    // Load config
-    const path = configPath || "./integrations.yaml";
+    // Load config - use provided path or search common locations
+    const path = configPath || getDefaultConfigPath();
 
     try {
       this.config = await loadIntegrationsConfig(path);

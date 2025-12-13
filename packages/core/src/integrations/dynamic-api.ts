@@ -16,6 +16,7 @@ import type {
   OpenAPIOperation,
   OpenAPIParameter,
 } from "./types";
+import YAML from "yaml";
 
 /**
  * Client for APIs with OpenAPI specification
@@ -58,9 +59,12 @@ export class OpenAPIClient implements IntegrationClient {
     try {
       return JSON.parse(content);
     } catch {
-      // Simple YAML parsing for common cases
-      // For production, use a proper YAML parser
-      throw new Error("YAML parsing not implemented - use JSON spec");
+      // Parse as YAML
+      try {
+        return YAML.parse(content);
+      } catch (yamlError) {
+        throw new Error(`Failed to parse OpenAPI spec as JSON or YAML: ${yamlError}`);
+      }
     }
   }
 
