@@ -210,9 +210,7 @@ const postgresQueryDefinition: ToolDefinition = {
 
 IMPORTANT: Only SELECT queries are allowed. INSERT, UPDATE, DELETE, and DDL statements are blocked.
 
-Connection options:
-1. Use 'connection_name' to reference a pre-configured database (recommended)
-2. Use 'connection_string' for ad-hoc connections (requires explicit approval)
+Connection: The database connection is handled automatically. DO NOT pass connection_name or connection_string unless specifically instructed - the tool will use the pre-configured DATABASE_URL by default. Just pass the query parameter.
 
 Example queries:
 - Check for NULL values: SELECT * FROM users WHERE email IS NULL LIMIT 10
@@ -264,30 +262,40 @@ function getPool(connectionString: string): pg.Pool {
   return pool;
 }
 
-function resolveConnectionString(args: Partial<PostgresQueryArgs>): string | null {
+function resolveConnectionString(args: Partial<PostgresQueryArgs>): { url: string | null; error?: string } {
   // Priority 1: Named connection from environment
   if (args.connection_name) {
     const envKey = `DB_${args.connection_name.toUpperCase().replace(/-/g, "_")}_URL`;
     const url = process.env[envKey];
-    if (url) return url;
+    if (url) return { url };
 
     // Also try without _URL suffix
     const envKey2 = `DB_${args.connection_name.toUpperCase().replace(/-/g, "_")}`;
     const url2 = process.env[envKey2];
-    if (url2) return url2;
+    if (url2) return { url: url2 };
+
+    // Named connection not found - fall through to other options
   }
 
-  // Priority 2: Direct connection string
+  // Priority 2: Direct connection string (validate format)
   if (args.connection_string) {
-    return args.connection_string;
+    // Validate it looks like a postgres URL
+    if (!args.connection_string.startsWith("postgres://") &&
+        !args.connection_string.startsWith("postgresql://")) {
+      return {
+        url: null,
+        error: `Invalid connection_string format. Must start with postgres:// or postgresql://. Got: "${args.connection_string.substring(0, 50)}..."`
+      };
+    }
+    return { url: args.connection_string };
   }
 
   // Priority 3: Default DATABASE_URL
   if (process.env.DATABASE_URL) {
-    return process.env.DATABASE_URL;
+    return { url: process.env.DATABASE_URL };
   }
 
-  return null;
+  return { url: null };
 }
 
 async function executePostgresQuery(
@@ -318,7 +326,17 @@ async function executePostgresQuery(
 
   // Resolve connection string
   const resolvedConnection = resolveConnectionString({ query, connection_name, connection_string });
-  if (!resolvedConnection) {
+
+  // Check for validation error (e.g., malformed connection_string)
+  if (resolvedConnection.error) {
+    return {
+      success: false,
+      output: "",
+      error: resolvedConnection.error,
+    };
+  }
+
+  if (!resolvedConnection.url) {
     const availableConnections: string[] = [];
     for (const key of Object.keys(process.env)) {
       if (key.startsWith("DB_") && key.endsWith("_URL")) {
@@ -337,6 +355,8 @@ async function executePostgresQuery(
     };
   }
 
+  const connectionUrl = resolvedConnection.url;
+
   // Clamp max_rows
   const effectiveMaxRows = Math.min(Math.max(1, max_rows || 100), 1000);
 
@@ -347,7 +367,7 @@ async function executePostgresQuery(
   }
 
   try {
-    const pool = getPool(resolvedConnection);
+    const pool = getPool(connectionUrl);
 
     // Execute with timeout
     const client = await pool.connect();
@@ -361,7 +381,7 @@ async function executePostgresQuery(
       const rows = result.rows.slice(0, effectiveMaxRows);
 
       // Mask connection string for logging (hide password)
-      const maskedConnection = resolvedConnection.replace(
+      const maskedConnection = connectionUrl.replace(
         /(:\/\/[^:]+:)[^@]+(@)/,
         "$1****$2"
       );
@@ -393,6 +413,13 @@ async function executePostgresQuery(
         success: false,
         output: "",
         error: `Database connection refused. Check if the database is running and accessible.`,
+      };
+    }
+    if (errorMessage.includes("ENOTFOUND") || errorMessage.includes("getaddrinfo")) {
+      return {
+        success: false,
+        output: "",
+        error: `Database host not found. Check the hostname in your connection string. The connection_string must be a full PostgreSQL URL like: postgresql://user:pass@hostname:5432/dbname`,
       };
     }
     if (errorMessage.includes("authentication failed")) {
@@ -443,11 +470,13 @@ const postgresSchemaDefinition: ToolDefinition = {
   type: "function",
   function: {
     name: PG_SCHEMA_TOOL_NAME,
-    description: `Get the schema information for a PostgreSQL database. Use this to discover tables, columns, and their types before writing queries.
+    description: `Get the schema information for a PostgreSQL database. Use this FIRST to discover tables, columns, and their types before writing queries.
+
+Connection: The database connection is handled automatically. DO NOT pass connection_name or connection_string unless specifically instructed - the tool will use the pre-configured DATABASE_URL by default.
 
 Returns:
-- List of tables in the database
-- Columns with their types for a specific table
+- List of tables in the database (if table_name is omitted)
+- Columns with their types for a specific table (if table_name is provided)
 - Foreign key relationships`,
     parameters: {
       type: "object",
@@ -499,7 +528,16 @@ async function executePostgresSchema(
     connection_string,
   });
 
-  if (!resolvedConnection) {
+  // Check for validation error (e.g., malformed connection_string)
+  if (resolvedConnection.error) {
+    return {
+      success: false,
+      output: "",
+      error: resolvedConnection.error,
+    };
+  }
+
+  if (!resolvedConnection.url) {
     return {
       success: false,
       output: "",
@@ -507,8 +545,10 @@ async function executePostgresSchema(
     };
   }
 
+  const connectionUrl = resolvedConnection.url;
+
   try {
-    const pool = getPool(resolvedConnection);
+    const pool = getPool(connectionUrl);
     const client = await pool.connect();
 
     try {
@@ -647,6 +687,30 @@ async function executePostgresSchema(
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
+
+    // Provide helpful error messages
+    if (errorMessage.includes("ECONNREFUSED")) {
+      return {
+        success: false,
+        output: "",
+        error: `Database connection refused. Check if the database is running and accessible.`,
+      };
+    }
+    if (errorMessage.includes("ENOTFOUND") || errorMessage.includes("getaddrinfo")) {
+      return {
+        success: false,
+        output: "",
+        error: `Database host not found. Check the hostname in your connection string. The connection_string must be a full PostgreSQL URL like: postgresql://user:pass@hostname:5432/dbname`,
+      };
+    }
+    if (errorMessage.includes("authentication failed")) {
+      return {
+        success: false,
+        output: "",
+        error: `Database authentication failed. Check credentials.`,
+      };
+    }
+
     return {
       success: false,
       output: "",

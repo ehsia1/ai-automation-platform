@@ -34,7 +34,30 @@ interface TestScenario {
 
 const scenarios: TestScenario[] = [
   {
-    name: "Negative Balance Investigation",
+    name: "Full E2E: Database → Code → PR Fix",
+    context: {
+      repository: "ehsia1/ai-agent-test",
+      database: {
+        issueType: "data_integrity",
+        suspectedTables: ["customers"],
+        description: "Some customers have negative account balances. This is likely caused by a missing validation in the code.",
+      },
+    },
+    input: `Investigate why some customers have negative balances in the database.
+
+Steps:
+1. Use postgres_schema to understand the table structure
+2. Use postgres_query to find customers with negative balances
+3. Search the code repository (ehsia1/ai-agent-test) for where balance updates happen
+4. Find the bug in customer_service.py that allows negative balances
+5. Create a PR to fix the validation bug
+
+The code is in ehsia1/ai-agent-test - explore it with github_list_files first.`,
+    expectedTools: ["postgres_schema", "postgres_query", "github_list_files", "github_get_file"],
+    expectedKeywords: ["negative", "balance", "customer", "validation", "update_balance"],
+  },
+  {
+    name: "Negative Balance Investigation (DB Only)",
     context: {
       database: {
         issueType: "data_integrity",
@@ -42,14 +65,21 @@ const scenarios: TestScenario[] = [
         description: "Some customers have negative account balances",
       },
     },
-    input: `Investigate why some customers have negative balances in the database.
-Find which customers are affected and determine if this is a data issue or code bug.
-Use postgres_schema first to understand the table structure, then query for anomalies.`,
+    input: `DATABASE INVESTIGATION ONLY - Do NOT search code repositories.
+
+Your task: Find customers with negative balances in the database.
+
+Required steps:
+1. FIRST call postgres_schema to see the customers table structure
+2. THEN call postgres_query to find records with negative balance values
+3. Report your findings with specific customer IDs and balance amounts
+
+Do NOT use github tools. Focus only on database analysis.`,
     expectedTools: ["postgres_schema", "postgres_query"],
     expectedKeywords: ["negative", "balance", "customer"],
   },
   {
-    name: "Duplicate Records Investigation",
+    name: "Duplicate Records Investigation (DB Only)",
     context: {
       database: {
         issueType: "duplicates",
@@ -57,14 +87,21 @@ Use postgres_schema first to understand the table structure, then query for anom
         description: "Duplicate customer records detected",
       },
     },
-    input: `Investigate duplicate customer records in the database.
-Find any customers with duplicate emails and report your findings.
-Start by understanding the schema, then query for duplicates.`,
+    input: `DATABASE INVESTIGATION ONLY - Do NOT search code repositories.
+
+Your task: Find duplicate customer records by email.
+
+Required steps:
+1. FIRST call postgres_schema to see the customers table structure
+2. THEN call postgres_query with a GROUP BY query to find duplicate emails
+3. Report which emails have duplicates and how many
+
+Do NOT use github tools. Focus only on database analysis.`,
     expectedTools: ["postgres_schema", "postgres_query"],
     expectedKeywords: ["duplicate", "email", "count"],
   },
   {
-    name: "Calculation Error Investigation",
+    name: "Calculation Error Investigation (DB Only)",
     context: {
       database: {
         issueType: "calculation_error",
@@ -72,14 +109,44 @@ Start by understanding the schema, then query for duplicates.`,
         description: "Order totals don't match sum of line items",
       },
     },
-    input: `Investigate order calculation discrepancies.
-Some orders have total_amount that doesn't match the sum of their line items.
-Find these orders and calculate the discrepancy amounts.`,
+    input: `DATABASE INVESTIGATION ONLY - Do NOT search code repositories.
+
+Your task: Find orders where total_amount doesn't match the sum of line items.
+
+Required steps:
+1. FIRST call postgres_schema to see the orders and order_items table structures
+2. THEN call postgres_query to join orders with order_items and find discrepancies
+3. Report which orders have wrong totals and the discrepancy amounts
+
+Do NOT use github tools. Focus only on database analysis.`,
     expectedTools: ["postgres_schema", "postgres_query"],
     expectedKeywords: ["order", "total", "discrepancy", "sum"],
   },
   {
-    name: "Missing Data Investigation",
+    name: "Full E2E: Order Calculation → Code Fix",
+    context: {
+      repository: "ehsia1/ai-agent-test",
+      database: {
+        issueType: "calculation_error",
+        suspectedTables: ["orders", "order_items"],
+        description: "Order totals don't match the sum of line items. This is a calculation bug in the order creation code.",
+      },
+    },
+    input: `Investigate order calculation discrepancies and trace to the code.
+
+Steps:
+1. FIRST use postgres_schema to understand orders and order_items tables
+2. THEN use postgres_query to find orders where total_amount != SUM(line_total)
+3. THEN use github_list_files on ehsia1/ai-agent-test to explore the repo
+4. THEN use github_get_file to read order_service.py
+5. The bug is that it uses integer division which truncates decimals
+
+You MUST call the database tools BEFORE the github tools.`,
+    expectedTools: ["postgres_schema", "postgres_query", "github_list_files", "github_get_file"],
+    expectedKeywords: ["order", "total", "integer", "calculation", "create_order"],
+  },
+  {
+    name: "Missing Data Investigation (DB Only)",
     context: {
       database: {
         issueType: "missing_data",
@@ -87,8 +154,16 @@ Find these orders and calculate the discrepancy amounts.`,
         description: "Some customers missing required name field",
       },
     },
-    input: `Investigate customers with missing or empty name fields.
-Find all affected records and report your findings.`,
+    input: `DATABASE INVESTIGATION ONLY - Do NOT search code repositories.
+
+Your task: Find customers with missing or empty name fields.
+
+Required steps:
+1. FIRST call postgres_schema to see the customers table structure
+2. THEN call postgres_query to find records where name is NULL or empty string
+3. Report which customers are affected
+
+Do NOT use github tools. Focus only on database analysis.`,
     expectedTools: ["postgres_schema", "postgres_query"],
     expectedKeywords: ["name", "null", "empty", "customer"],
   },

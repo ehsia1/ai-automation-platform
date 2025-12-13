@@ -1,0 +1,107 @@
+# AI Automation Platform - Integration Configuration
+#
+# This file configures external service integrations for the AI agent.
+# Supports three integration types:
+#   - mcp: MCP servers (highest reliability)
+#   - api: Dynamic API via OpenAPI spec
+#   - rest: Simple REST API with optional discovery
+#
+# Environment variables can be referenced as ${VAR} or ${VAR:-default}
+
+version: "1.0"
+
+integrations:
+  # ============================================================
+  # Tier 1: MCP Integrations (Pre-built, Highest Reliability)
+  # ============================================================
+
+  # Notion - Documentation and knowledge base
+  # Note: MCP integration not yet implemented, using direct API
+  # notion:
+  #   type: mcp
+  #   package: "@modelcontextprotocol/server-notion"
+  #   env:
+  #     NOTION_TOKEN: ${NOTION_TOKEN}
+
+  # GitHub - Code repositories and PRs
+  # Note: We have native GitHub tools, but MCP could be added
+  # github:
+  #   type: mcp
+  #   package: "@modelcontextprotocol/server-github"
+  #   env:
+  #     GITHUB_TOKEN: ${GITHUB_TOKEN}
+
+  # ============================================================
+  # Tier 2: API Integrations (OpenAPI Spec)
+  # ============================================================
+
+  # PagerDuty - Incident management
+  # pagerduty:
+  #   type: api
+  #   openapi: https://raw.githubusercontent.com/PagerDuty/api-schema/main/reference/REST/openapiv3.json
+  #   auth:
+  #     type: bearer
+  #     token: ${PAGERDUTY_TOKEN}
+  #   operations:
+  #     - listIncidents
+  #     - getIncident
+  #     - listServices
+  #     - listOnCalls
+
+  # Datadog - Monitoring and observability
+  # datadog:
+  #   type: api
+  #   openapi: https://raw.githubusercontent.com/DataDog/datadog-api-spec/master/static/openapi.v2.json
+  #   baseUrl: https://api.datadoghq.com
+  #   auth:
+  #     type: header
+  #     name: DD-API-KEY
+  #     value: ${DATADOG_API_KEY}
+
+  # ============================================================
+  # Tier 3: REST Integrations (Simple REST APIs)
+  # ============================================================
+
+  # Example: Internal user service
+  # internal-users:
+  #   type: rest
+  #   baseUrl: https://users.internal.acme.com
+  #   auth:
+  #     type: header
+  #     name: X-API-Key
+  #     value: ${USERS_API_KEY}
+  #   endpoints:
+  #     - name: getUser
+  #       method: GET
+  #       path: /users/{id}
+  #       description: Get user by ID
+  #     - name: listUsers
+  #       method: GET
+  #       path: /users
+  #       description: List all users
+
+  # ============================================================
+  # Active Integrations
+  # ============================================================
+
+  # JSONPlaceholder - Test API (for development/testing)
+  jsonplaceholder:
+    type: rest
+    baseUrl: https://jsonplaceholder.typicode.com
+    endpoints:
+      - name: listPosts
+        method: GET
+        path: /posts
+        description: List all posts
+      - name: getPost
+        method: GET
+        path: /posts/{id}
+        description: Get a specific post
+      - name: listUsers
+        method: GET
+        path: /users
+        description: List all users
+      - name: getUser
+        method: GET
+        path: /users/{id}
+        description: Get a specific user

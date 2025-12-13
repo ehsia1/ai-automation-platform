@@ -28,6 +28,10 @@ export interface ToolParameterProperty {
     properties?: Record<string, { type: string; description: string }>;
     required?: string[];
   };
+  /** Allow additional properties for object types */
+  additionalProperties?: boolean;
+  /** Nested properties for object types */
+  properties?: Record<string, ToolParameterProperty>;
 }
 
 export interface ToolCall {
