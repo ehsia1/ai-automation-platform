@@ -15,6 +15,7 @@ import {
   githubListFilesTool,
   githubEditFileTool,
 } from "./github";
+import { postgresQueryTool, postgresSchemaTool } from "./database";
 
 // Register all tools
 export function registerAllTools(): void {
@@ -28,6 +29,10 @@ export function registerAllTools(): void {
   toolRegistry.register(githubCreateDraftPRTool); // safe_write
   toolRegistry.register(githubCreateSingleFilePRTool); // safe_write - simpler version for single file
   toolRegistry.register(githubEditFileTool); // safe_write - search & replace edits (PREFERRED)
+
+  // Database tools (read_only)
+  toolRegistry.register(postgresQueryTool); // read_only - SELECT only
+  toolRegistry.register(postgresSchemaTool); // read_only - schema discovery
 }
 
 // Auto-register on import
@@ -43,3 +48,4 @@ export {
   githubCreateSingleFilePRTool,
   githubEditFileTool,
 } from "./github";
+export { postgresQueryTool, postgresSchemaTool } from "./database";
