@@ -18,6 +18,8 @@ import {
 import { postgresQueryTool, postgresSchemaTool } from "./database";
 import { apiCallTool, listIntegrationsTool } from "../integrations/tool";
 import { serviceLookupTool } from "./service-lookup";
+import { searchDocsTool, docsStatsTool } from "../rag/tool";
+import { datadogRumSearchTool, datadogRumAnalyticsTool } from "./datadog-rum";
 
 // Register all tools
 export function registerAllTools(): void {
@@ -42,6 +44,14 @@ export function registerAllTools(): void {
 
   // Service registry tool (read_only)
   toolRegistry.register(serviceLookupTool); // read_only - find service info
+
+  // RAG / Documentation search tools (read_only)
+  toolRegistry.register(searchDocsTool); // read_only - semantic doc search
+  toolRegistry.register(docsStatsTool); // read_only - index statistics
+
+  // Datadog RUM tools (read_only)
+  toolRegistry.register(datadogRumSearchTool); // read_only - search RUM events
+  toolRegistry.register(datadogRumAnalyticsTool); // read_only - aggregate RUM metrics
 }
 
 // Auto-register on import
@@ -60,3 +70,5 @@ export {
 export { postgresQueryTool, postgresSchemaTool } from "./database";
 export { apiCallTool, listIntegrationsTool } from "../integrations/tool";
 export { serviceLookupTool } from "./service-lookup";
+export { searchDocsTool, docsStatsTool } from "../rag/tool";
+export { datadogRumSearchTool, datadogRumAnalyticsTool } from "./datadog-rum";

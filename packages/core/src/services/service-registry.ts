@@ -155,6 +155,17 @@ export class ServiceRegistry {
   }
 
   /**
+   * Register a new service
+   */
+  register(config: ServiceConfig & { name: string }): void {
+    const name = config.name.toLowerCase();
+    const { name: _, ...serviceConfig } = config;
+    this.services.set(name, serviceConfig as ServiceConfig);
+    this.generateAliases(name, serviceConfig as ServiceConfig);
+    this.initialized = true;
+  }
+
+  /**
    * Get services by team
    */
   getByTeam(team: string): Map<string, ServiceConfig> {

@@ -1307,6 +1307,21 @@ export const KNOWN_INTEGRATIONS: Record<string, KnownIntegration> = {
     },
   },
 
+  // CloudWatch Logs MCP Server
+  "cloudwatch-mcp": {
+    displayName: "CloudWatch Logs (MCP)",
+    description: "Query CloudWatch Logs Insights via MCP server",
+    envVars: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"],
+    keyOperations: ["cloudwatch_query_logs", "cloudwatch_list_log_groups"],
+    config: {
+      type: "mcp",
+      package: "@ai-automation/mcp-cloudwatch",
+      env: {
+        AWS_REGION: "${AWS_REGION:-us-east-1}",
+      },
+    },
+  },
+
   // ============================================================
   // Testing & Development
   // ============================================================
