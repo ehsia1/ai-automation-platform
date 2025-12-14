@@ -45,6 +45,8 @@ export interface MCPIntegration {
   env?: Record<string, string>;
   /** Optional: specific tools to expose (default: all) */
   tools?: string[];
+  /** Set to false to explicitly disable this integration */
+  enabled?: boolean;
 }
 
 export interface APIIntegration {
@@ -59,6 +61,10 @@ export interface APIIntegration {
   operations?: string[];
   /** Request timeout in ms (default: 30000) */
   timeout?: number;
+  /** Additional headers to include in all requests */
+  headers?: Record<string, string>;
+  /** Set to false to explicitly disable this integration */
+  enabled?: boolean;
 }
 
 export interface RESTIntegration {
@@ -71,6 +77,8 @@ export interface RESTIntegration {
   endpoints?: RESTEndpoint[];
   /** Request timeout in ms (default: 30000) */
   timeout?: number;
+  /** Set to false to explicitly disable this integration */
+  enabled?: boolean;
 }
 
 export interface RESTEndpoint {

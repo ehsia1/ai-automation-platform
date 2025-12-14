@@ -1,10 +1,19 @@
 # AI Automation Platform - Integration Configuration
 #
-# This file configures external service integrations for the AI agent.
-# Supports three integration types:
-#   - mcp: MCP servers (highest reliability)
-#   - api: Dynamic API via OpenAPI spec
-#   - rest: Simple REST API with optional discovery
+# Zero-Config Mode:
+#   Most popular integrations are pre-configured and auto-enable
+#   when you set their environment variables. For example:
+#
+#     export PAGERDUTY_TOKEN=xxx  → PagerDuty is enabled
+#     export SLACK_BOT_TOKEN=xxx  → Slack is enabled
+#     export DATADOG_API_KEY=xxx  → Datadog is enabled
+#
+#   See known-integrations.ts for the full list of pre-configured services.
+#
+# This file is OPTIONAL and used for:
+#   - Adding custom integrations not in the known registry
+#   - Overriding settings for known integrations
+#   - Disabling auto-enabled integrations (set enabled: false)
 #
 # Environment variables can be referenced as ${VAR} or ${VAR:-default}
 
@@ -12,66 +21,9 @@ version: "1.0"
 
 integrations:
   # ============================================================
-  # Tier 1: MCP Integrations (Pre-built, Highest Reliability)
+  # Custom Integrations
   # ============================================================
-
-  # Notion - Documentation and knowledge base
-  # Note: MCP integration not yet implemented, using direct API
-  # notion:
-  #   type: mcp
-  #   package: "@modelcontextprotocol/server-notion"
-  #   env:
-  #     NOTION_TOKEN: ${NOTION_TOKEN}
-
-  # GitHub - Code repositories and PRs
-  # Note: We have native GitHub tools, but MCP could be added
-  # github:
-  #   type: mcp
-  #   package: "@modelcontextprotocol/server-github"
-  #   env:
-  #     GITHUB_TOKEN: ${GITHUB_TOKEN}
-
-  # ============================================================
-  # Tier 2: API Integrations (OpenAPI Spec)
-  # ============================================================
-
-  # PagerDuty - Incident management
-  # Uncomment and set PAGERDUTY_TOKEN to enable
-  # pagerduty:
-  #   type: api
-  #   openapi: https://raw.githubusercontent.com/PagerDuty/api-schema/main/reference/REST/openapiv3.json
-  #   auth:
-  #     type: bearer
-  #     token: ${PAGERDUTY_TOKEN}
-  #   operations:
-  #     - listIncidents
-  #     - getIncident
-  #     - listServices
-  #     - listOnCalls
-
-  # HTTPBin - Test API (useful for testing integration framework)
-  httpbin:
-    type: api
-    openapi: https://raw.githubusercontent.com/APIs-guru/openapi-directory/main/APIs/httpbin.org/0.9.2/openapi.yaml
-    baseUrl: https://httpbin.org
-    operations:
-      - GET__ip
-      - GET__headers
-      - GET__user-agent
-
-  # Datadog - Monitoring and observability
-  # datadog:
-  #   type: api
-  #   openapi: https://raw.githubusercontent.com/DataDog/datadog-api-spec/master/static/openapi.v2.json
-  #   baseUrl: https://api.datadoghq.com
-  #   auth:
-  #     type: header
-  #     name: DD-API-KEY
-  #     value: ${DATADOG_API_KEY}
-
-  # ============================================================
-  # Tier 3: REST Integrations (Simple REST APIs)
-  # ============================================================
+  # Add your custom APIs here. These are NOT auto-enabled.
 
   # Example: Internal user service
   # internal-users:
@@ -92,27 +44,37 @@ integrations:
   #       description: List all users
 
   # ============================================================
-  # Active Integrations
+  # Overrides for Known Integrations
   # ============================================================
+  # Uncomment to override auto-enabled settings
 
-  # JSONPlaceholder - Test API (for development/testing)
-  jsonplaceholder:
-    type: rest
-    baseUrl: https://jsonplaceholder.typicode.com
-    endpoints:
-      - name: listPosts
-        method: GET
-        path: /posts
-        description: List all posts
-      - name: getPost
-        method: GET
-        path: /posts/{id}
-        description: Get a specific post
-      - name: listUsers
-        method: GET
-        path: /users
-        description: List all users
-      - name: getUser
-        method: GET
-        path: /users/{id}
-        description: Get a specific user
+  # Disable HTTPBin (it's auto-enabled by default)
+  # httpbin:
+  #   enabled: false
+
+  # Override JSONPlaceholder with custom endpoints
+  # jsonplaceholder:
+  #   type: rest
+  #   baseUrl: https://jsonplaceholder.typicode.com
+  #   endpoints:
+  #     - name: listPosts
+  #       method: GET
+  #       path: /posts
+  #       description: List all posts
+  #     # Add more custom endpoints...
+
+  # ============================================================
+  # Environment Variables Reference
+  # ============================================================
+  # Set these env vars to auto-enable their integrations:
+  #
+  # PAGERDUTY_TOKEN          → PagerDuty incident management
+  # OPSGENIE_API_KEY         → Opsgenie alerting
+  # DATADOG_API_KEY          → Datadog monitoring (also needs DATADOG_APP_KEY)
+  # NEW_RELIC_API_KEY        → New Relic APM
+  # SLACK_BOT_TOKEN          → Slack messaging
+  # JIRA_API_TOKEN           → Jira issues (also needs JIRA_EMAIL, JIRA_BASE_URL)
+  # LINEAR_API_KEY           → Linear issues
+  # VERCEL_TOKEN             → Vercel deployments
+  # NOTION_TOKEN             → Notion (via MCP server)
+  # GITHUB_TOKEN             → GitHub (via MCP server, or native tools)

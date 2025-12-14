@@ -1,0 +1,83 @@
+# AI Automation Platform - Service Registry
+#
+# Maps service names (from alerts) to their GitHub repositories and metadata.
+# The agent uses this to know which codebase to investigate for a given alert.
+#
+# Service Lookup:
+#   The agent will match alerts to services using:
+#   1. Exact name match
+#   2. Alias matching (my-service → myservice, my_service)
+#   3. Repository name matching
+#   4. Fuzzy substring matching
+#
+# Example alert: "High error rate on payment-service"
+#   → Looks up "payment-service"
+#   → Gets repository "acme/payment-service"
+#   → Agent investigates that codebase
+
+version: "1.0"
+
+services:
+  # ============================================================
+  # Example Services (customize for your organization)
+  # ============================================================
+
+  # Example: Payment processing service
+  # payment-service:
+  #   repository: "acme/payment-service"
+  #   language: "typescript"
+  #   team: "payments"
+  #   description: "Handles payment processing and transactions"
+  #   logGroups:
+  #     - "/aws/lambda/payment-service-prod"
+  #     - "/ecs/payment-service"
+  #   dependencies:
+  #     - "user-service"
+  #     - "notification-service"
+  #   runbookUrl: "https://wiki.acme.com/runbooks/payment-service"
+  #   oncallSchedule: "payments-oncall"
+
+  # Example: User management service
+  # user-service:
+  #   repository: "acme/user-service"
+  #   language: "python"
+  #   team: "platform"
+  #   description: "User authentication and profile management"
+  #   logGroups:
+  #     - "/aws/lambda/user-service-prod"
+  #   metadata:
+  #     tier: "critical"
+  #     sla: "99.9%"
+
+  # ============================================================
+  # Test Services (for development/testing)
+  # ============================================================
+
+  ai-oncall-test:
+    repository: "ehsia1/ai-oncall-test"
+    language: "python"
+    team: "platform"
+    description: "Test repository for AI on-call agent testing"
+    logGroups: []
+
+  ai-agent-test:
+    repository: "ehsia1/ai-agent-test"
+    language: "typescript"
+    team: "platform"
+    description: "General agent testing repository"
+    logGroups: []
+
+  # ============================================================
+  # This Platform
+  # ============================================================
+
+  ai-automation-platform:
+    repository: "ehsia1/ai-automation-platform"
+    language: "typescript"
+    team: "platform"
+    description: "AI-powered automation platform"
+    logGroups:
+      - "/aws/lambda/ai-automation-platform"
+    metadata:
+      framework: "SST"
+      runtime: "nodejs20.x"

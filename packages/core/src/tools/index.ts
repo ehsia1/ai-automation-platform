@@ -17,6 +17,7 @@ import {
 } from "./github";
 import { postgresQueryTool, postgresSchemaTool } from "./database";
 import { apiCallTool, listIntegrationsTool } from "../integrations/tool";
+import { serviceLookupTool } from "./service-lookup";
 
 // Register all tools
 export function registerAllTools(): void {
@@ -38,6 +39,9 @@ export function registerAllTools(): void {
   // Integration tools (dynamic API calling)
   toolRegistry.register(apiCallTool); // safe_write - call any configured API
   toolRegistry.register(listIntegrationsTool); // read_only - discover integrations
+
+  // Service registry tool (read_only)
+  toolRegistry.register(serviceLookupTool); // read_only - find service info
 }
 
 // Auto-register on import
@@ -55,3 +59,4 @@ export {
 } from "./github";
 export { postgresQueryTool, postgresSchemaTool } from "./database";
 export { apiCallTool, listIntegrationsTool } from "../integrations/tool";
+export { serviceLookupTool } from "./service-lookup";

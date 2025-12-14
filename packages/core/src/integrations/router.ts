@@ -17,6 +17,12 @@ import type {
 import { loadIntegrationsConfig, validateConfig, getDefaultConfigPath } from "./config";
 import { OpenAPIClient, RESTClient } from "./dynamic-api";
 import { MCPClient } from "./mcp-client";
+import {
+  KNOWN_INTEGRATIONS,
+  getAutoEnabledIntegrations,
+  getKnownIntegrationConfig,
+  getIntegrationsSummary,
+} from "./known-integrations";
 
 export class IntegrationRouter {
   private clients: Map<string, IntegrationClient> = new Map();
@@ -43,29 +49,71 @@ export class IntegrationRouter {
   }
 
   private async doInitialize(configPath?: string): Promise<void> {
-    // Load config - use provided path or search common locations
-    const path = configPath || getDefaultConfigPath();
+    // Step 1: Get auto-enabled known integrations (based on env vars)
+    const autoEnabled = getAutoEnabledIntegrations();
+    const knownConfigs: IntegrationsConfig["integrations"] = {};
 
-    try {
-      this.config = await loadIntegrationsConfig(path);
-    } catch (error) {
-      // Config file not found - that's okay, just means no integrations configured
-      console.log(`[IntegrationRouter] No config found at ${path}, starting with no integrations`);
-      this.config = { integrations: {} };
-      this.initialized = true;
-      return;
+    for (const name of autoEnabled) {
+      const config = getKnownIntegrationConfig(name);
+      if (config) {
+        knownConfigs[name] = config;
+      }
     }
 
-    // Validate
+    // Step 2: Try to load YAML config (optional)
+    const path = configPath || getDefaultConfigPath();
+    let yamlConfig: IntegrationsConfig | null = null;
+
+    try {
+      yamlConfig = await loadIntegrationsConfig(path);
+    } catch (error) {
+      // Config file not found - that's okay, we have known integrations
+      console.log(`[IntegrationRouter] No YAML config found at ${path}`);
+    }
+
+    // Step 3: Merge configs (YAML overrides known integrations)
+    // YAML can also disable known integrations with `enabled: false`
+    const mergedIntegrations: IntegrationsConfig["integrations"] = {
+      ...knownConfigs, // Start with auto-enabled known integrations
+    };
+
+    if (yamlConfig?.integrations) {
+      for (const [name, integration] of Object.entries(yamlConfig.integrations)) {
+        // Check for explicit disable flag
+        if ((integration as { enabled?: boolean }).enabled === false) {
+          // Remove from merged if explicitly disabled
+          delete mergedIntegrations[name];
+          console.log(`[IntegrationRouter] ${name} disabled via YAML config`);
+        } else {
+          // Override or add
+          mergedIntegrations[name] = integration;
+        }
+      }
+    }
+
+    this.config = { integrations: mergedIntegrations };
+
+    // Step 4: Validate merged config
     const errors = validateConfig(this.config);
     if (errors.length > 0) {
       throw new Error(`Invalid integrations config:\n${errors.join("\n")}`);
     }
 
-    // Initialize clients
+    // Step 5: Initialize clients
     await this.loadClients();
     this.initialized = true;
-    console.log(`[IntegrationRouter] Initialized with ${this.clients.size} integrations`);
+
+    // Log summary
+    const enabledNames = Object.keys(mergedIntegrations);
+    console.log(`[IntegrationRouter] Initialized with ${this.clients.size} integrations: ${enabledNames.join(", ")}`);
+
+    // Show what else is available
+    const available = Object.keys(KNOWN_INTEGRATIONS).filter(
+      (name) => !enabledNames.includes(name) && KNOWN_INTEGRATIONS[name].envVars.length > 0
+    );
+    if (available.length > 0) {
+      console.log(`[IntegrationRouter] More integrations available: ${available.slice(0, 5).join(", ")}${available.length > 5 ? "..." : ""}`);
+    }
   }
 
   /**
@@ -314,6 +362,20 @@ export class IntegrationRouter {
    */
   getConfig(): IntegrationsConfig | null {
     return this.config;
+  }
+
+  /**
+   * Get a summary of available and enabled integrations
+   */
+  getIntegrationsSummary(): string {
+    return getIntegrationsSummary();
+  }
+
+  /**
+   * Get list of known integrations that could be enabled
+   */
+  getKnownIntegrations(): string[] {
+    return Object.keys(KNOWN_INTEGRATIONS);
   }
 
   /**
