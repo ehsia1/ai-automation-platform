@@ -1323,6 +1323,189 @@ export const KNOWN_INTEGRATIONS: Record<string, KnownIntegration> = {
   },
 
   // ============================================================
+  // Database MCP Servers
+  // ============================================================
+
+  // PostgreSQL MCP Server
+  "postgres-mcp": {
+    displayName: "PostgreSQL (MCP)",
+    description: "Query PostgreSQL databases via MCP server",
+    envVars: ["POSTGRES_CONNECTION_STRING"],
+    keyOperations: ["query", "list_tables", "describe_table"],
+    config: {
+      type: "mcp",
+      package: "@modelcontextprotocol/server-postgres",
+      env: {
+        POSTGRES_CONNECTION_STRING: "${POSTGRES_CONNECTION_STRING}",
+      },
+    },
+  },
+
+  // SQLite MCP Server
+  "sqlite-mcp": {
+    displayName: "SQLite (MCP)",
+    description: "Query SQLite databases via MCP server",
+    envVars: ["SQLITE_DB_PATH"],
+    keyOperations: ["query", "list_tables", "describe_table"],
+    config: {
+      type: "mcp",
+      package: "@modelcontextprotocol/server-sqlite",
+      env: {
+        SQLITE_DB_PATH: "${SQLITE_DB_PATH}",
+      },
+    },
+  },
+
+  // MySQL MCP Server (community)
+  "mysql-mcp": {
+    displayName: "MySQL (MCP)",
+    description: "Query MySQL databases via MCP server",
+    envVars: ["MYSQL_CONNECTION_STRING"],
+    keyOperations: ["query", "list_tables", "describe_table"],
+    config: {
+      type: "mcp",
+      package: "@benborber/mcp-server-mysql",
+      env: {
+        MYSQL_CONNECTION_STRING: "${MYSQL_CONNECTION_STRING}",
+      },
+    },
+  },
+
+  // MongoDB MCP Server (community)
+  "mongodb-mcp": {
+    displayName: "MongoDB (MCP)",
+    description: "Query MongoDB databases via MCP server",
+    envVars: ["MONGODB_URI"],
+    keyOperations: ["find", "aggregate", "list_collections"],
+    config: {
+      type: "mcp",
+      package: "mcp-mongo-server",
+      env: {
+        MONGODB_URI: "${MONGODB_URI}",
+      },
+    },
+  },
+
+  // Redis MCP Server (community)
+  "redis-mcp": {
+    displayName: "Redis (MCP)",
+    description: "Interact with Redis via MCP server",
+    envVars: ["REDIS_URL"],
+    keyOperations: ["get", "set", "keys", "hgetall"],
+    config: {
+      type: "mcp",
+      package: "@modelcontextprotocol/server-redis",
+      env: {
+        REDIS_URL: "${REDIS_URL}",
+      },
+    },
+  },
+
+  // DynamoDB MCP Server (AWS)
+  "dynamodb-mcp": {
+    displayName: "DynamoDB (MCP)",
+    description: "Query AWS DynamoDB tables via MCP server",
+    envVars: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"],
+    keyOperations: ["scan", "query", "get_item", "list_tables"],
+    config: {
+      type: "mcp",
+      package: "@aws/mcp-server-dynamodb",
+      env: {
+        AWS_REGION: "${AWS_REGION:-us-east-1}",
+      },
+    },
+  },
+
+  // ============================================================
+  // Additional MCP Servers
+  // ============================================================
+
+  // Filesystem MCP Server
+  "filesystem-mcp": {
+    displayName: "Filesystem (MCP)",
+    description: "Read/write files on the local filesystem",
+    envVars: ["MCP_FILESYSTEM_ALLOWED_PATHS"],
+    keyOperations: ["read_file", "write_file", "list_directory"],
+    config: {
+      type: "mcp",
+      package: "@modelcontextprotocol/server-filesystem",
+      env: {
+        MCP_ALLOWED_PATHS: "${MCP_FILESYSTEM_ALLOWED_PATHS}",
+      },
+    },
+  },
+
+  // Brave Search MCP Server
+  "brave-search-mcp": {
+    displayName: "Brave Search (MCP)",
+    description: "Web search via Brave Search API",
+    envVars: ["BRAVE_API_KEY"],
+    keyOperations: ["search", "local_search"],
+    config: {
+      type: "mcp",
+      package: "@anthropic/mcp-server-brave-search",
+      env: {
+        BRAVE_API_KEY: "${BRAVE_API_KEY}",
+      },
+    },
+  },
+
+  // Puppeteer MCP Server
+  "puppeteer-mcp": {
+    displayName: "Puppeteer (MCP)",
+    description: "Browser automation and web scraping",
+    envVars: ["MCP_PUPPETEER_ENABLED"],
+    keyOperations: ["navigate", "screenshot", "click", "evaluate"],
+    config: {
+      type: "mcp",
+      package: "@anthropic/mcp-server-puppeteer",
+      env: {},
+    },
+  },
+
+  // Fetch MCP Server
+  "fetch-mcp": {
+    displayName: "Fetch (MCP)",
+    description: "Make HTTP requests and fetch web content",
+    envVars: ["MCP_FETCH_ENABLED"],
+    keyOperations: ["fetch", "get", "post"],
+    config: {
+      type: "mcp",
+      package: "@anthropic/mcp-server-fetch",
+      env: {},
+    },
+  },
+
+  // Slack MCP Server
+  "slack-mcp": {
+    displayName: "Slack (MCP)",
+    description: "Interact with Slack workspaces via MCP",
+    envVars: ["SLACK_BOT_TOKEN", "SLACK_TEAM_ID"],
+    keyOperations: ["post_message", "list_channels", "search_messages"],
+    config: {
+      type: "mcp",
+      package: "@anthropic/mcp-server-slack",
+      env: {
+        SLACK_BOT_TOKEN: "${SLACK_BOT_TOKEN}",
+        SLACK_TEAM_ID: "${SLACK_TEAM_ID}",
+      },
+    },
+  },
+
+  // Memory MCP Server (for persistent context)
+  "memory-mcp": {
+    displayName: "Memory (MCP)",
+    description: "Persistent key-value memory for agents",
+    envVars: ["MCP_MEMORY_ENABLED"],
+    keyOperations: ["store", "retrieve", "list", "delete"],
+    config: {
+      type: "mcp",
+      package: "@anthropic/mcp-server-memory",
+      env: {},
+    },
+  },
+
+  // ============================================================
   // Testing & Development
   // ============================================================
 

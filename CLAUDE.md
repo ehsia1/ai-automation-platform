@@ -297,7 +297,23 @@ curl $API_URL/approvals
 - Agent resume after approval
 - Postman collection for API testing
 - E2E test harness with keyword validation (84.6% pass rate)
+- CloudWatch investigation tested with real log groups ✓
+- **Dynamic MCP integration system** - auto-discovers tools from environment
+
+### MCP Database Servers (Platform-Agnostic)
+Set the environment variable → database tools auto-available:
+
+| Database | Env Var | Package |
+|----------|---------|---------|
+| PostgreSQL | `POSTGRES_CONNECTION_STRING` | `@modelcontextprotocol/server-postgres` |
+| SQLite | `SQLITE_DB_PATH` | `@modelcontextprotocol/server-sqlite` |
+| MySQL | `MYSQL_CONNECTION_STRING` | `@benborber/mcp-server-mysql` |
+| MongoDB | `MONGODB_URI` | `mcp-mongo-server` |
+| Redis | `REDIS_URL` | `@modelcontextprotocol/server-redis` |
+| DynamoDB | `AWS_ACCESS_KEY_ID` | `@aws/mcp-server-dynamodb` |
+
+Additional MCP servers: Filesystem, Brave Search, Puppeteer, Fetch, Slack, Memory
 
 ### Next Priority
-- Test with real log groups
-- Database query tool
+- Test MCP database integration
+- PR Summary agent
