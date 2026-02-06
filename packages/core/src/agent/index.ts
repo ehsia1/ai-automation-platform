@@ -6,3 +6,4 @@ export * from "./timeout";
 
 // Prompts
 export * from "./prompts/devops-investigator";
+export * from "./prompts/pr-summary";

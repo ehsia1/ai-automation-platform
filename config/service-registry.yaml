@@ -53,12 +53,24 @@ services:
   # Test Services (for development/testing)
   # ============================================================
 
+  # Calculator test service (simulates real production service)
+  calculator-service:
+    repository: "ehsia1/ai-oncall-test"
+    language: "python"
+    team: "platform"
+    description: "Calculator service with divide functionality - used for testing"
+    logGroups:
+      - "/ai-automation-platform/test-service"
+    dependencies: []
+    runbookUrl: "https://github.com/ehsia1/ai-oncall-test/blob/main/README.md"
+
   ai-oncall-test:
     repository: "ehsia1/ai-oncall-test"
     language: "python"
     team: "platform"
     description: "Test repository for AI on-call agent testing"
-    logGroups: []
+    logGroups:
+      - "/ai-automation-platform/test-service"
 
   ai-agent-test:
     repository: "ehsia1/ai-agent-test"

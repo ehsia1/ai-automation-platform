@@ -185,6 +185,27 @@ export default $config({
       },
     });
 
+    // PR Summary agent subscriber - triggered by PR events
+    bus.subscribe("pr-summary", {
+      handler: "packages/functions/src/agents/pr-summary.handler",
+      link: [agentRunsTable],
+      environment: {
+        ...llmEnv,
+        GITHUB_TOKEN: process.env.GITHUB_TOKEN || "",
+      },
+      timeout: "90 seconds",
+      permissions: [
+        {
+          actions: ["bedrock:InvokeModel"],
+          resources: ["*"],
+        },
+      ],
+    }, {
+      pattern: {
+        detailType: ["pr.summary.requested"],
+      },
+    });
+
     // Health check
     api.route("GET /", {
       handler: "packages/functions/src/api/health.handler",
@@ -196,9 +217,28 @@ export default $config({
       link: [itemsTable, bus],
     });
 
+    api.route("POST /webhooks/pagerduty", {
+      handler: "packages/functions/src/ingestion/pagerduty.handler",
+      link: [itemsTable, bus],
+    });
+
+    api.route("POST /webhooks/opsgenie", {
+      handler: "packages/functions/src/ingestion/opsgenie.handler",
+      link: [itemsTable, bus],
+    });
+
     api.route("POST /ingest/email", {
       handler: "packages/functions/src/ingestion/email.handler",
       link: [itemsTable, bus],
+    });
+
+    api.route("POST /webhooks/github", {
+      handler: "packages/functions/src/ingestion/github-pr.handler",
+      link: [bus],
+      environment: {
+        GITHUB_TOKEN: process.env.GITHUB_TOKEN || "",
+        GITHUB_WEBHOOK_SECRET: process.env.GITHUB_WEBHOOK_SECRET || "",
+      },
     });
 
     // Alerts API

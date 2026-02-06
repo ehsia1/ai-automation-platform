@@ -152,7 +152,7 @@ API endpoints are documented in a Postman collection for easy testing.
 | Alerts | `GET /alerts` - List alerts, `GET /alerts/:id` - Get alert details |
 | Items | `GET /items` - List items, `GET /items/:id` - Get item details |
 | Tasks | `GET /tasks` - List tasks |
-| Webhooks | `POST /webhooks/datadog`, `POST /ingest/email` |
+| Webhooks | `POST /webhooks/datadog`, `POST /webhooks/pagerduty`, `POST /webhooks/opsgenie`, `POST /ingest/email` |
 | (root) | `GET /` - Health check |
 
 ### Keeping Postman Updated

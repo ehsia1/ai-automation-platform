@@ -8,6 +8,11 @@ export * from "./registry";
 import { toolRegistry } from "./registry";
 import { cloudwatchQueryLogsTool } from "./cloudwatch";
 import {
+  cloudwatchGetMetricsTool,
+  cloudwatchListMetricsTool,
+} from "./cloudwatch-metrics";
+import { buildIncidentTimelineTool } from "./timeline";
+import {
   githubSearchCodeTool,
   githubGetFileTool,
   githubCreateDraftPRTool,
@@ -20,11 +25,15 @@ import { apiCallTool, listIntegrationsTool } from "../integrations/tool";
 import { serviceLookupTool } from "./service-lookup";
 import { searchDocsTool, docsStatsTool } from "../rag/tool";
 import { datadogRumSearchTool, datadogRumAnalyticsTool } from "./datadog-rum";
+import { executeRunbookTool } from "../runbooks/executor";
 
 // Register all tools
 export function registerAllTools(): void {
   // CloudWatch tools (read_only)
   toolRegistry.register(cloudwatchQueryLogsTool);
+  toolRegistry.register(cloudwatchGetMetricsTool);
+  toolRegistry.register(cloudwatchListMetricsTool);
+  toolRegistry.register(buildIncidentTimelineTool);
 
   // GitHub tools
   toolRegistry.register(githubSearchCodeTool); // read_only
@@ -52,6 +61,9 @@ export function registerAllTools(): void {
   // Datadog RUM tools (read_only)
   toolRegistry.register(datadogRumSearchTool); // read_only - search RUM events
   toolRegistry.register(datadogRumAnalyticsTool); // read_only - aggregate RUM metrics
+
+  // Runbook executor (safe_write)
+  toolRegistry.register(executeRunbookTool); // safe_write - execute runbook steps
 }
 
 // Auto-register on import
@@ -59,6 +71,11 @@ registerAllTools();
 
 // Re-export individual tools for direct access
 export { cloudwatchQueryLogsTool } from "./cloudwatch";
+export {
+  cloudwatchGetMetricsTool,
+  cloudwatchListMetricsTool,
+} from "./cloudwatch-metrics";
+export { buildIncidentTimelineTool } from "./timeline";
 export {
   githubSearchCodeTool,
   githubGetFileTool,
@@ -72,3 +89,4 @@ export { apiCallTool, listIntegrationsTool } from "../integrations/tool";
 export { serviceLookupTool } from "./service-lookup";
 export { searchDocsTool, docsStatsTool } from "../rag/tool";
 export { datadogRumSearchTool, datadogRumAnalyticsTool } from "./datadog-rum";
+export { executeRunbookTool } from "../runbooks/executor";

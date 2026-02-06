@@ -149,6 +149,8 @@ Once deployed, the following endpoints are available:
 | `/approvals/{id}/approve` | POST | Approve pending action |
 | `/approvals/{id}/reject` | POST | Reject pending action |
 | `/webhooks/datadog` | POST | Ingest Datadog alerts |
+| `/webhooks/pagerduty` | POST | Ingest PagerDuty incidents (V3 webhook) |
+| `/webhooks/opsgenie` | POST | Ingest OpsGenie alerts |
 | `/alerts` | GET | List all alerts |
 
 ### Example: Trigger Investigation

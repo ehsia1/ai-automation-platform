@@ -2,6 +2,8 @@ import { z } from "zod";
 
 export const ItemSourceSchema = z.enum([
   "datadog",
+  "pagerduty",
+  "opsgenie",
   "cloudwatch",
   "github",
   "email",

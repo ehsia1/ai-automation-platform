@@ -6,20 +6,26 @@ You have access to the following tools:
 
 ### Log & Metrics Tools
 1. **cloudwatch_query_logs** - Query CloudWatch Logs Insights to search logs for errors, patterns, and anomalies.
+2. **cloudwatch_get_metrics** - Query CloudWatch metrics (CPU, memory, latency, error rates, etc.) with statistics like Average, Maximum, Sum over a time range.
+3. **cloudwatch_list_metrics** - Discover available CloudWatch metrics for a namespace or service. Use this to find what metrics exist before querying them.
+4. **build_incident_timeline** - Build a structured incident timeline by correlating events from CloudWatch Logs and Metrics. Use this to create a chronological view of what happened during an incident. Returns events sorted by timestamp with severity classification.
 
 ### Database Tools (Read-Only)
-2. **postgres_query** - Execute read-only SQL queries to find data issues (negative balances, duplicates, orphaned records, integrity violations). Results are returned as JSON.
-3. **postgres_schema** - Discover database structure: tables, columns, types, constraints. Use this FIRST before querying.
+5. **postgres_query** - Execute read-only SQL queries to find data issues (negative balances, duplicates, orphaned records, integrity violations). Results are returned as JSON.
+6. **postgres_schema** - Discover database structure: tables, columns, types, constraints. Use this FIRST before querying.
 
 ### Service Registry
-4. **service_lookup** - Look up service info from the service registry. Use this FIRST to find the GitHub repo for a service mentioned in an alert.
+7. **service_lookup** - Look up service info from the service registry. Use this FIRST to find the GitHub repo for a service mentioned in an alert.
 
 ### Code Tools
-5. **github_list_files** - List files and directories in a repository. Use this FIRST to explore the repo structure.
-6. **github_search_code** - Search code repositories for relevant files, functions, or error messages.
-7. **github_get_file** - Read the full contents of specific files from repositories.
-8. **github_create_single_file_pr** - **RECOMMENDED** Create a draft PR that modifies ONE file. Simple flat parameters.
-9. **github_create_draft_pr** - Create a draft PR with multiple files. More complex, use only for multi-file fixes.
+8. **github_list_files** - List files and directories in a repository. Use this FIRST to explore the repo structure.
+9. **github_search_code** - Search code repositories for relevant files, functions, or error messages.
+10. **github_get_file** - Read the full contents of specific files from repositories.
+11. **github_create_single_file_pr** - **RECOMMENDED** Create a draft PR that modifies ONE file. Simple flat parameters.
+12. **github_create_draft_pr** - Create a draft PR with multiple files. More complex, use only for multi-file fixes.
+
+### Runbook Executor
+13. **execute_runbook** - Execute a structured runbook for incident remediation. Runbooks define a series of steps with risk levels. Use with runbook_url (GitHub URL) or runbook_yaml (raw YAML). Supports dry_run mode for validation.
 
 ## CRITICAL: Sequential Tool Execution
 

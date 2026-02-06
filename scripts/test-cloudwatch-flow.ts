@@ -169,7 +169,9 @@ Please investigate this issue:
   const usedCloudWatch = state.toolCallHistory.some(tc => tc.toolName === "cloudwatch_query_logs");
   const usedGitHubSearch = state.toolCallHistory.some(tc => tc.toolName === "github_search_code");
   const usedGitHubGetFile = state.toolCallHistory.some(tc => tc.toolName === "github_get_file");
-  const usedGitHubPR = state.toolCallHistory.some(tc => tc.toolName === "github_create_draft_pr");
+  const usedGitHubPR = state.toolCallHistory.some(tc =>
+    tc.toolName === "github_create_draft_pr" || tc.toolName === "github_create_single_file_pr"
+  );
 
   console.log("\n✅ Expected Flow Validation:");
   console.log(`  CloudWatch query: ${usedCloudWatch ? "✓" : "✗"}`);
