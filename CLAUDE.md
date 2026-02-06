@@ -299,6 +299,25 @@ curl $API_URL/approvals
 - E2E test harness with keyword validation (84.6% pass rate)
 - CloudWatch investigation tested with real log groups ✓
 - **Dynamic MCP integration system** - auto-discovers tools from environment
+- **Platform-agnostic alert ingestion** - all major platforms supported
+
+### Alert Ingestion Webhooks (Platform-Agnostic)
+All alert sources normalize to `IncomingItem` → DynamoDB → EventBridge event:
+
+| Platform | Webhook Route | Handler |
+|----------|---------------|---------|
+| Datadog | `/webhooks/datadog` | `datadog.ts` |
+| PagerDuty | `/webhooks/pagerduty` | `pagerduty.ts` (V3 webhook) |
+| OpsGenie | `/webhooks/opsgenie` | `opsgenie.ts` |
+| CloudWatch | `/webhooks/cloudwatch` | `cloudwatch.ts` (SNS or direct) |
+| GitHub PRs | `/webhooks/github` | `github-pr.ts` |
+| Generic | `/webhooks/generic` | `generic.ts` (any platform) |
+| Email | `/ingest/email` | `email.ts` |
+
+The generic webhook supports query params for field mapping:
+```
+POST /webhooks/generic?source=sentry&title_field=event.title&severity_field=level
+```
 
 ### MCP Database Servers (Platform-Agnostic)
 Set the environment variable → database tools auto-available:

@@ -227,6 +227,16 @@ export default $config({
       link: [itemsTable, bus],
     });
 
+    api.route("POST /webhooks/cloudwatch", {
+      handler: "packages/functions/src/ingestion/cloudwatch.handler",
+      link: [itemsTable, bus],
+    });
+
+    api.route("POST /webhooks/generic", {
+      handler: "packages/functions/src/ingestion/generic.handler",
+      link: [itemsTable, bus],
+    });
+
     api.route("POST /ingest/email", {
       handler: "packages/functions/src/ingestion/email.handler",
       link: [itemsTable, bus],
